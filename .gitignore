@@ -361,3 +361,11 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# Ignore all files in these directories
+wwwroot/Pending/**
+wwwroot/Approved/**
+
+# Keep the directories so they exist in the repo
+!wwwroot/Pending/
+!wwwroot/Approved/
