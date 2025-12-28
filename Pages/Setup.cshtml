@@ -1,0 +1,73 @@
+﻿@page
+@model Siphon.Pages.SetupModel
+@{
+    ViewData["Title"] = "Setup Siphon";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>Setup Siphon</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            background-color: #f8f9fa;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .setup-card {
+            width: 100%;
+            max-width: 450px;
+            border-radius: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card setup-card shadow border-0">
+        <div class="card-body p-5">
+            <h2 class="text-center mb-4 fw-bold text-primary">Setup Siphon</h2>
+            <p class="text-muted text-center mb-4">Configure your admin account and preferences.</p>
+
+            <form method="post">
+                <h6 class="border-bottom pb-2 mb-3 text-uppercase small text-muted font-weight-bold">Account</h6>
+
+                <div class="mb-3">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" asp-for="Username" />
+                </div>
+                <div class="mb-4">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" asp-for="Password" required />
+                </div>
+
+                <h6 class="border-bottom pb-2 mb-3 mt-4 text-uppercase small text-muted font-weight-bold">Cleanup Policy</h6>
+
+                <div class="mb-2">
+                    <label class="form-label">Pending File Retention</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" asp-for="RetentionValue" min="1" required />
+                        <select class="form-select" asp-for="RetentionUnit" style="max-width: 120px;">
+                            <option value="Minutes">Minutes</option>
+                            <option value="Hours">Hours</option>
+                            <option value="Days">Days</option>
+                            <option value="Weeks">Weeks</option>
+                            <option value="Months">Months</option>
+                            <option value="Years">Years</option>
+                        </select>
+                    </div>
+                    <div class="form-text">
+                        Files in "Pending" older than this will be automatically deleted.
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 mt-4">Complete Setup</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

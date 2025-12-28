@@ -1,0 +1,54 @@
+﻿@page
+@model Siphon.Pages.LoginModel
+@{
+    ViewData["Title"] = "Login";
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width" />
+    <title>Login - Siphon</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <style>
+        body {
+            background-color: #212529;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 360px;
+            border-radius: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card login-card shadow-lg border-0">
+        <div class="card-body p-4">
+            <h3 class="text-center mb-4 fw-bold">Siphon Login</h3>
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert alert-danger py-2">@Model.ErrorMessage</div>
+            }
+
+            <form method="post">
+                <div class="mb-3">
+                    <label class="form-label text-muted small">Username</label>
+                    <input type="text" class="form-control" asp-for="Username" required />
+                </div>
+                <div class="mb-4">
+                    <label class="form-label text-muted small">Password</label>
+                    <input type="password" class="form-control" asp-for="Password" required />
+                </div>
+                <button type="submit" class="btn btn-dark w-100">Sign In</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

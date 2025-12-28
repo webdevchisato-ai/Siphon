@@ -1,0 +1,254 @@
+﻿@page
+@model Siphon.Pages.DownloaderModel
+@{
+    ViewData["Title"] = "Downloader";
+}
+
+<div class="container py-3">
+
+    <div class="d-flex justify-content-end mb-3 gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#settingsPanel" aria-expanded="false">
+            <i class="bi bi-gear-fill"></i> Scraper Settings
+        </button>
+        <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#torPanel" aria-expanded="false">
+            <i class="bi bi-globe"></i> Tor Network
+        </button>
+    </div>
+
+    <div class="collapse mb-2" id="settingsPanel" data-bs-parent=".container">
+        <div class="card card-body bg-light border-0 shadow-sm">
+            <h6 class="card-title mb-3">Eporner Configuration</h6>
+            <form method="post" asp-page-handler="UpdateSettings">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label small text-muted">PHPSESSID</label>
+                        <input type="text" class="form-control" asp-for="PhpSessId" placeholder="Paste PHPSESSID cookie..." />
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small text-muted">EPRNS</label>
+                        <input type="text" class="form-control" asp-for="Eprns" placeholder="Paste EPRNS cookie..." />
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-dark w-100">
+                            <i class="bi bi-save"></i> Save
+                        </button>
+                    </div>
+                </div>
+                <div class="form-text mt-2">These cookies are saved to <code>/app/Config/scraper_config.txt</code> and used for Eporner downloads.</div>
+            </form>
+        </div>
+    </div>
+
+    <div class="collapse mb-4" id="torPanel" data-bs-parent=".container">
+        <div class="card card-body bg-light border-0 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="card-title mb-0">Tor Connection Status</h6>
+                <span id="torIndicator" class="badge bg-secondary">Unknown</span>
+            </div>
+
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex gap-4">
+                        <div>
+                            <small class="text-muted d-block">Current IP</small>
+                            <span id="torIp" class="fw-bold font-monospace fs-5">...</span>
+                        </div>
+                        <div>
+                            <small class="text-muted d-block">Location</small>
+                            <span id="torCountry" class="fw-bold fs-5">...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <button id="btnResetTor" onclick="resetTor()" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-repeat"></i> New Identity
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row justify-content-center mb-5 mt-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4">
+                    <h4 class="card-title mb-3">Add New Download</h4>
+                    <form method="post" class="d-flex gap-2">
+                        <input type="text" class="form-control form-control-lg" name="Url" placeholder="Paste video URL here..." required />
+                        <button class="btn btn-primary btn-lg px-4" type="submit">
+                            <i class="bi bi-download"></i> Start
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h4 class="mb-3 text-muted">Active Downloads</h4>
+
+    <div id="loadingSpinner" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="text-muted mt-2">Connecting to Download Service...</p>
+    </div>
+
+    <div id="jobsContainer" class="row g-3"></div>
+</div>
+
+<script>
+    let isInitialized = false;
+
+    // --- Tor Functions ---
+    function updateTorStatus() {
+        fetch('/Downloader?handler=TorStatus')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('torIp').innerText = data.ip;
+                document.getElementById('torCountry').innerText = data.country;
+
+                const indicator = document.getElementById('torIndicator');
+                const btn = document.getElementById('btnResetTor');
+
+                if (data.isRotating) {
+                    indicator.className = 'badge bg-warning text-dark';
+                    indicator.innerText = 'Rotating...';
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Rotating...';
+                } else if (data.country === 'Unknown' || data.country === 'Initializing...') {
+                    indicator.className = 'badge bg-secondary';
+                    indicator.innerText = 'Initializing';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> New Identity';
+                } else {
+                    indicator.className = 'badge bg-success';
+                    indicator.innerText = 'Connected';
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-arrow-repeat"></i> New Identity';
+                }
+            })
+            .catch(console.error);
+    }
+
+    function resetTor() {
+        const btn = document.getElementById('btnResetTor');
+        btn.disabled = true;
+        btn.innerHTML = "Requesting...";
+
+        fetch('?handler=ResetTor', {
+            method: 'POST',
+            headers: {
+                'RequestVerificationToken': document.getElementsByName('__RequestVerificationToken')[0].value
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            console.log(data.message);
+            // Status update loop will handle UI changes
+        })
+        .catch(err => {
+            console.error(err);
+            btn.disabled = false;
+            btn.innerText = "Error";
+        });
+    }
+
+    // --- Downloader Functions ---
+    function cancelJob(id) {
+        fetch(`?handler=Cancel&id=${id}`, {
+            method: 'POST',
+            headers: {
+                'RequestVerificationToken': document.getElementsByName('__RequestVerificationToken')[0].value
+            }
+        }).catch(console.error);
+    }
+
+    setInterval(() => {
+        // 1. Get Jobs
+        fetch('/Downloader?handler=Status')
+            .then(response => response.json())
+            .then(data => {
+
+                if (!isInitialized) {
+                    document.getElementById("loadingSpinner").style.display = "none";
+                    isInitialized = true;
+                }
+
+                const container = document.getElementById("jobsContainer");
+
+                if (data.length === 0) {
+                    container.innerHTML = `
+                        <div class="col-12 text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            No active downloads
+                        </div>`;
+                    return;
+                }
+
+                container.innerHTML = "";
+
+                data.forEach(job => {
+                    let statusColor = "bg-primary";
+                    let isFinished = false;
+
+                    if(job.progress >= 100) { statusColor = "bg-success"; isFinished = true; }
+                    else if(job.isError) { statusColor = "bg-danger"; isFinished = true; }
+                    else if(job.status.includes("Waiting")) statusColor = "bg-warning text-dark";
+                    else if(job.status.includes("Cancelling")) statusColor = "bg-danger";
+
+                    const thumb = job.thumbnailUrl || "/images/default-video.png";
+                    const speed = job.downloadSpeed || "";
+                    const showCancel = !isFinished && !job.status.includes("Cancelling");
+
+                    const html = `
+                    <div class="col-12">
+                        <div class="card shadow-sm border-0 overflow-hidden">
+                            <div class="row g-0 align-items-center">
+                                <div class="col-md-2 bg-black text-center" style="height: 100px;">
+                                    <img src="${thumb}"
+                                         class="h-100 w-100"
+                                         style="object-fit: cover; opacity: 0.9;"
+                                         onerror="this.src='https://placehold.co/150x100?text=No+Preview'">
+                                </div>
+                                <div class="col-md-10">
+                                    <div class="card-body py-2">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <h6 class="card-title mb-0 text-truncate fw-bold" title="${job.url}">
+                                                ${job.filename || job.url}
+                                            </h6>
+                                            <div class="d-flex gap-2 align-items-center">
+                                                ${speed ? `<span class="badge bg-info text-dark shadow-sm"><i class="bi bi-speedometer2"></i> ${speed}</span>` : ''}
+
+                                                <span class="badge ${statusColor} rounded-pill">${job.status}</span>
+
+                                                ${showCancel ? `
+                                                    <button onclick="cancelJob('${job.id}')" class="btn btn-outline-danger btn-sm py-0 px-2" title="Cancel Download">
+                                                        <i class="bi bi-x-lg"></i>
+                                                    </button>` : ''}
+                                            </div>
+                                        </div>
+
+                                        <div class="progress" style="height: 12px; background-color: #e9ecef;">
+                                            <div class="progress-bar progress-bar-striped progress-bar-animated ${statusColor}"
+                                                 role="progressbar" style="width: ${job.progress}%">
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex justify-content-end mt-1">
+                                            <small class="text-muted fw-bold">${Math.round(job.progress)}%</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                    container.innerHTML += html;
+                });
+            })
+            .catch(err => console.error(err));
+
+        // 2. Update Tor Status
+        updateTorStatus();
+
+    }, 1000);
+</script>

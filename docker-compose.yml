@@ -1,0 +1,13 @@
+services:
+  siphon-app:
+    build: .
+    ports:
+      - "5000:8080"
+    volumes:
+      - ./Config:/app/Config
+      - ./Downloads:/app/wwwroot/Pending
+      # NEW: Map the Approved folder
+      - ./Approved:/app/wwwroot/Approved
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_HTTP_PORTS=8080

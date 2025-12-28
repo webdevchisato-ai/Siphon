@@ -1,0 +1,26 @@
+﻿@page
+@model Siphon.Pages.IndexModel
+@{
+    ViewData["Title"] = "Home";
+}
+
+<div class="text-center mt-5 pt-5">
+    <div class="mb-4">
+        <i class="bi bi-cloud-download text-primary" style="font-size: 5rem;"></i>
+    </div>
+
+    <h1 class="display-4 fw-bold">Welcome to Siphon</h1>
+    <p class="lead text-muted mb-5">
+        Secure, Dockerized Video Downloader routed via Tor.
+    </p>
+
+    <div class="d-flex justify-content-center gap-3">
+        <a asp-page="/Downloader" class="btn btn-primary btn-lg px-5 py-3 shadow-sm">
+            <i class="bi bi-download"></i> Open Downloader
+        </a>
+
+        <a asp-page="/Pending" class="btn btn-outline-dark btn-lg px-5 py-3 shadow-sm">
+            <i class="bi bi-hourglass-split"></i> View Pending
+        </a>
+    </div>
+</div>
