@@ -26,7 +26,6 @@ namespace Siphon.Services
             {
                 _logger.LogInformation($"[Preview] Queued: {Path.GetFileName(videoPath)}");
 
-                // Fire and forget, but wrapped to handle semaphore waiting
                 Task.Run(async () =>
                 {
                     try
@@ -54,40 +53,45 @@ namespace Siphon.Services
                 string previewPath = videoPath.Replace(".mp4", "_preview.mp4");
 
                 // 1. Generate Thumbnail
-                // Optimization: Put -ss BEFORE -i for fast "Input Seeking" (instant jump)
                 if (!File.Exists(thumbPath))
                 {
-                    await RunFfmpeg($"-y -ss 00:00:10 -i \"{videoPath}\" -frames:v 1 -q:v 5 \"{thumbPath}\"");
+                    // Use -ss 00:00:01 for very short videos to ensure we get a frame
+                    // If video is < 1s, ffmpeg usually defaults to the first frame anyway
+                    await RunFfmpeg($"-y -ss 00:00:01 -i \"{videoPath}\" -frames:v 1 -q:v 5 \"{thumbPath}\"");
                 }
 
-                // 2. Generate Montage
+                // 2. Generate Preview Video
                 if (!File.Exists(previewPath))
                 {
                     double duration = await GetVideoDuration(videoPath);
+
                     if (duration > 10)
                     {
-                        int t1 = (int)(duration * 0.10); // 10% mark
-                        int t2 = (int)(duration * 0.40); // 40% mark
-                        int t3 = (int)(duration * 0.70); // 70% mark
-
-                        // OPTIMIZATION: Multi-Input Seeking + Concat
-                        // Instead of reading the whole file to find later frames, we open the file 3 times
-                        // and jump instantly to the timestamps.
+                        // --- LONG VIDEO (>10s): Create 3-part Montage ---
+                        int t1 = (int)(duration * 0.10);
+                        int t2 = (int)(duration * 0.40);
+                        int t3 = (int)(duration * 0.70);
 
                         var sb = new StringBuilder();
                         sb.Append("-y ");
-
-                        // Input 1
                         sb.Append($"-ss {t1} -t 3 -i \"{videoPath}\" ");
-                        // Input 2
                         sb.Append($"-ss {t2} -t 3 -i \"{videoPath}\" ");
-                        // Input 3
                         sb.Append($"-ss {t3} -t 3 -i \"{videoPath}\" ");
 
-                        // Filter Complex: Concat 3 streams, Scale to 320p
-                        // -preset ultrafast: sacrifices compression for maximum CPU speed
                         sb.Append("-filter_complex \"[0:v][1:v][2:v]concat=n=3:v=1:a=0,scale=320:-2[v]\" ");
                         sb.Append("-map \"[v]\" -c:v libx264 -preset ultrafast -crf 28 -an ");
+                        sb.Append($"\"{previewPath}\"");
+
+                        await RunFfmpeg(sb.ToString());
+                    }
+                    else if (duration > 0)
+                    {
+                        // --- SHORT VIDEO (<=10s): Convert the whole thing ---
+                        // Just scale it down and remove audio. No seeking needed.
+                        var sb = new StringBuilder();
+                        sb.Append($"-y -i \"{videoPath}\" ");
+                        sb.Append("-vf \"scale=320:-2\" ");
+                        sb.Append("-c:v libx264 -preset ultrafast -crf 28 -an ");
                         sb.Append($"\"{previewPath}\"");
 
                         await RunFfmpeg(sb.ToString());
@@ -110,11 +114,9 @@ namespace Siphon.Services
                 Arguments = args,
                 CreateNoWindow = true,
                 UseShellExecute = false,
-                RedirectStandardError = true // Optional: Redirect error if you want to debug ffmpeg output
+                RedirectStandardError = true
             });
 
-            // If you want to see ffmpeg errors in your logs, you can read StandardError here
-            // But for now we just wait
             await p.WaitForExitAsync();
         }
 

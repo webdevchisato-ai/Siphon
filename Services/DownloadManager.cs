@@ -29,20 +29,20 @@ namespace Siphon.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly PreviewGenerator _previewGenerator;
         private readonly ILogger<DownloadManager> _logger;
+        private readonly IWebHostEnvironment _env; // Added Env
 
-        // Use volatile to ensure thread safety when swapping semaphores during hot reload
         private volatile SemaphoreSlim _semaphore;
         private readonly string _configPath;
         private int _currentThreadLimit = 3;
 
-        public DownloadManager(IServiceProvider serviceProvider, PreviewGenerator previewGenerator, ILogger<DownloadManager> logger)
+        public DownloadManager(IServiceProvider serviceProvider, PreviewGenerator previewGenerator, ILogger<DownloadManager> logger, IWebHostEnvironment env)
         {
             _serviceProvider = serviceProvider;
             _previewGenerator = previewGenerator;
             _logger = logger;
+            _env = env; // Store Env
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
 
-            // Initial Config Load
             LoadAndApplyConfig();
         }
 
@@ -56,7 +56,7 @@ namespace Siphon.Services
         {
             try
             {
-                int newThreads = 3; // Default
+                int newThreads = 3;
                 if (File.Exists(_configPath))
                 {
                     var lines = File.ReadAllLines(_configPath);
@@ -75,8 +75,6 @@ namespace Siphon.Services
                 if (_semaphore == null || newThreads != _currentThreadLimit)
                 {
                     _currentThreadLimit = newThreads;
-                    // Replace the semaphore. Old jobs will release the instance they grabbed.
-                    // New jobs will grab this new one.
                     _semaphore = new SemaphoreSlim(_currentThreadLimit);
                     _logger.LogInformation($"Configuration loaded. Concurrency limit set to: {_currentThreadLimit}");
                 }
@@ -122,6 +120,9 @@ namespace Siphon.Services
                     job.Status = "Cancelling...";
                     _logger.LogInformation($"Job cancellation requested: {job.Id}");
                     try { job.Cts.Cancel(); } catch { }
+
+                    // Cleanup preview immediately on cancel request
+                    CleanupPreview(job.Id);
                 }
             }
         }
@@ -130,7 +131,6 @@ namespace Siphon.Services
         {
             job.Status = "Waiting for slot...";
 
-            // Capture the specific semaphore instance active at this moment
             SemaphoreSlim currentSemaphore = _semaphore;
 
             try
@@ -141,6 +141,7 @@ namespace Siphon.Services
             {
                 job.Status = "Cancelled";
                 job.CompletedAt = DateTime.UtcNow;
+                CleanupPreview(job.Id);
                 return;
             }
 
@@ -148,7 +149,6 @@ namespace Siphon.Services
             {
                 _logger.LogInformation($"Starting download for job: {job.Id}");
                 using var scope = _serviceProvider.CreateScope();
-                // VideoDownloader will reload config internally on instantiation to get fresh Cookies
                 var downloader = scope.ServiceProvider.GetRequiredService<VideoDownloader>();
 
                 await downloader.ProcessDownload(job);
@@ -179,9 +179,37 @@ namespace Siphon.Services
             }
             finally
             {
-                // Release the specific semaphore instance we waited on
                 currentSemaphore.Release();
                 try { job.Cts.Dispose(); } catch { }
+
+                // Cleanup the downloaded preview image
+                CleanupPreview(job.Id);
+            }
+        }
+
+        private void CleanupPreview(string jobId)
+        {
+            try
+            {
+                string previewDir = Path.Combine(_env.WebRootPath, "PreviewImages");
+                if (Directory.Exists(previewDir))
+                {
+                    // Find any file starting with the ID (e.g. guid.jpg, guid.ico)
+                    var files = Directory.GetFiles(previewDir, $"{jobId}.*");
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            File.Delete(file);
+                            _logger.LogDebug($"Cleaned up preview file: {Path.GetFileName(file)}");
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Failed to cleanup preview for {jobId}: {ex.Message}");
             }
         }
     }
