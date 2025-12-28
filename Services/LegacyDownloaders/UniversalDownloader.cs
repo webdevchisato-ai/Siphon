@@ -14,7 +14,7 @@ namespace Siphon.Services.LegacyDownloaders
             _path = p; _url = u; _job = job;
         }
 
-        public async Task Download()
+        public async Task Download(CancellationToken token)
         {
             _signal = new TaskCompletionSource<string>();
             string name = "Unknown";
@@ -23,6 +23,8 @@ namespace Siphon.Services.LegacyDownloaders
 
             try
             {
+                token.ThrowIfCancellationRequested();
+
                 _job.Status = "Initializing Universal Scraper...";
                 await new BrowserFetcher().DownloadAsync();
 
@@ -34,6 +36,7 @@ namespace Siphon.Services.LegacyDownloaders
 
                 var page = await browser.NewPageAsync();
                 await page.SetRequestInterceptionAsync(true);
+
                 page.Request += async (s, e) => {
                     if (e.Request.Url.Contains(".mp4") && !_signal.Task.IsCompleted)
                     {
@@ -43,7 +46,7 @@ namespace Siphon.Services.LegacyDownloaders
                     else try { await e.Request.ContinueAsync(); } catch { }
                 };
 
-                await page.GoToAsync(_url, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } });
+                await page.GoToAsync(_url, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } }).WaitAsync(token);
 
                 try
                 {
@@ -61,6 +64,8 @@ namespace Siphon.Services.LegacyDownloaders
 
                 foreach (var el in els)
                 {
+                    token.ThrowIfCancellationRequested();
+
                     var t = await page.EvaluateFunctionAsync<string>("e => e.innerText", el);
                     var h = await page.EvaluateFunctionAsync<string>("e => e.getAttribute('href')", el) ?? "";
 
@@ -76,15 +81,25 @@ namespace Siphon.Services.LegacyDownloaders
                 _job.Status = "Clicking download button...";
                 await page.EvaluateFunctionAsync("e => e.click()", best);
 
-                var res = await Task.WhenAny(_signal.Task, Task.Delay(30000));
+                var res = await Task.WhenAny(_signal.Task, Task.Delay(30000, token));
                 if (res != _signal.Task) throw new Exception("Timeout waiting for video stream.");
 
                 string dlUrl = await _signal.Task;
                 await browser.CloseAsync(); browser = null;
 
+                token.ThrowIfCancellationRequested();
+
                 fullPath = Path.Combine(_path, $"{name}.mp4");
                 _job.FinalFilePath = fullPath;
-                await SharedScraperLogic.DownloadWithProgressAsync(dlUrl, fullPath, _url, name, 1, _job);
+
+                // Pass token to shared logic
+                await SharedScraperLogic.DownloadWithProgressAsync(dlUrl, fullPath, _url, name, 1, _job, token);
+            }
+            catch (OperationCanceledException)
+            {
+                if (browser != null && !browser.IsClosed) await browser.CloseAsync();
+                if (!string.IsNullOrEmpty(fullPath) && File.Exists(fullPath)) try { File.Delete(fullPath); } catch { }
+                throw;
             }
             catch (Exception ex)
             {

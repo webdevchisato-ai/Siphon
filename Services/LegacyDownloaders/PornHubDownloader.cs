@@ -13,11 +13,13 @@ namespace Siphon.Services.LegacyDownloaders
             _path = p; _site = s; _url = u; _job = job;
         }
 
-        public async Task Download()
+        public async Task Download(CancellationToken token)
         {
             int maxRetries = 5;
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
+                token.ThrowIfCancellationRequested();
+
                 _signal = new TaskCompletionSource<string>();
                 string name = "Identifying...";
                 string fullPath = null;
@@ -45,14 +47,14 @@ namespace Siphon.Services.LegacyDownloaders
                         else try { await e.Request.ContinueAsync(); } catch { }
                     };
 
-                    await page.GoToAsync(_site, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } });
+                    await page.GoToAsync(_site, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } }).WaitAsync(token);
 
-                    await page.WaitForSelectorAsync("input[type='text']");
+                    await page.WaitForSelectorAsync("input[type='text']").WaitAsync(token);
                     await page.TypeAsync("input[type='text']", _url);
                     await page.Keyboard.PressAsync("Enter");
 
-                    await page.WaitForSelectorAsync(".download-buttons button", new WaitForSelectorOptions { Timeout = 20000 });
-                    await Task.Delay(1000);
+                    await page.WaitForSelectorAsync(".download-buttons button", new WaitForSelectorOptions { Timeout = 20000 }).WaitAsync(token);
+                    await Task.Delay(1000, token);
 
                     var tEl = await page.QuerySelectorAsync("#video-title");
                     if (tEl != null)
@@ -73,16 +75,25 @@ namespace Siphon.Services.LegacyDownloaders
                     _job.Status = $"Found {max}p. Sniffing video URL...";
                     await page.EvaluateFunctionAsync("b => b.click()", best);
 
-                    var res = await Task.WhenAny(_signal.Task, Task.Delay(45000));
+                    var res = await Task.WhenAny(_signal.Task, Task.Delay(45000, token));
                     if (res != _signal.Task) throw new Exception("Timeout waiting for video stream.");
 
                     string dlUrl = await _signal.Task;
                     await browser.CloseAsync(); browser = null;
 
+                    token.ThrowIfCancellationRequested();
+
                     fullPath = Path.Combine(_path, $"{name}.mp4");
                     _job.FinalFilePath = fullPath;
-                    await SharedScraperLogic.DownloadWithProgressAsync(dlUrl, fullPath, _site, name, attempt, _job);
+
+                    await SharedScraperLogic.DownloadWithProgressAsync(dlUrl, fullPath, _site, name, attempt, _job, token);
                     return;
+                }
+                catch (OperationCanceledException)
+                {
+                    if (browser != null && !browser.IsClosed) await browser.CloseAsync();
+                    if (!string.IsNullOrEmpty(fullPath) && File.Exists(fullPath)) try { File.Delete(fullPath); } catch { }
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -91,7 +102,7 @@ namespace Siphon.Services.LegacyDownloaders
 
                     if (attempt == maxRetries) throw;
                     _job.Status = $"Legacy Error: {ex.Message}. Retrying...";
-                    await Task.Delay(2000);
+                    await Task.Delay(2000, token);
                 }
             }
         }

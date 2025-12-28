@@ -48,11 +48,11 @@ namespace Siphon.Services
                 // Legacy logic needs to be aware of tokens if you want to support cancel there
                 // For now, we assume simple task wrapper
                 if (job.Url.Contains("eporner.com"))
-                    await new EpornerDownloader(_downloadPath, job.Url, job, _phpSessId, _eprns).Download();
+                    await new EpornerDownloader(_downloadPath, job.Url, job, _phpSessId, _eprns).Download(token);
                 else if (job.Url.Contains("pornhub.com"))
-                    await new PornHubDownloader(_downloadPath, "https://pornhubfans.com", job.Url, job).Download();
+                    await new PornHubDownloader(_downloadPath, "https://pornhubfans.com", job.Url, job).Download(token);
                 else
-                    await new UniversalDownloader(_downloadPath, job.Url, job).Download();
+                    await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 
                 job.Status = "Completed via Legacy";
                 job.Progress = 100;

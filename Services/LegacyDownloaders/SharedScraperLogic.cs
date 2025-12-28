@@ -1,7 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using System.Net;
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services
 {
     public static class SharedScraperLogic
     {
@@ -23,7 +23,7 @@ namespace Siphon.Services.LegacyDownloaders
             return string.IsNullOrWhiteSpace(cleanName) ? "Video_Download" : cleanName;
         }
 
-        public static async Task DownloadWithProgressAsync(string url, string path, string refUrl, string name, int attempt, DownloadJob job)
+        public static async Task DownloadWithProgressAsync(string url, string path, string refUrl, string name, int attempt, DownloadJob job, CancellationToken token)
         {
             // Configure HttpClient to use Tor Proxy
             var proxy = new WebProxy(PROXY_URL);
@@ -34,14 +34,16 @@ namespace Siphon.Services.LegacyDownloaders
                 client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0");
                 client.DefaultRequestHeaders.Add("Referer", refUrl);
 
-                using (var resp = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+                // Pass token to GetAsync
+                using (var resp = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, token))
                 {
                     if (!resp.IsSuccessStatusCode) throw new Exception($"HTTP {resp.StatusCode}");
 
                     var total = resp.Content.Headers.ContentLength ?? -1L;
                     bool unknown = total == -1;
 
-                    using (var source = await resp.Content.ReadAsStreamAsync())
+                    // Pass token to ReadAsStreamAsync
+                    using (var source = await resp.Content.ReadAsStreamAsync(token))
                     using (var dest = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
                     {
                         var buf = new byte[65536];
@@ -49,9 +51,11 @@ namespace Siphon.Services.LegacyDownloaders
                         var totalRead = 0L;
                         var sw = System.Diagnostics.Stopwatch.StartNew();
 
-                        while ((read = await source.ReadAsync(buf, 0, buf.Length)) > 0)
+                        // Pass token to ReadAsync
+                        while ((read = await source.ReadAsync(buf, 0, buf.Length, token)) > 0)
                         {
-                            await dest.WriteAsync(buf, 0, read);
+                            // Pass token to WriteAsync
+                            await dest.WriteAsync(buf, 0, read, token);
                             totalRead += read;
 
                             // Update Job Status periodically (every ~512KB)
@@ -63,9 +67,11 @@ namespace Siphon.Services.LegacyDownloaders
                                 string spd = $"{((totalRead / sec) / 1024 / 1024):0.0} MB/s";
                                 string pre = attempt > 1 ? $"[RETRY {attempt}] " : "";
 
+                                job.DownloadSpeed = spd; // Update UI property
+
                                 if (unknown)
                                 {
-                                    job.Status = $"{pre}Downloading (Legacy)... {mb:0.0} MB @ {spd}";
+                                    job.Status = $"{pre}Downloading (Legacy)... {mb:0.0} MB";
                                     // Keep progress pulsing if unknown
                                     job.Progress = (job.Progress >= 90) ? 10 : job.Progress + 5;
                                 }
@@ -73,7 +79,7 @@ namespace Siphon.Services.LegacyDownloaders
                                 {
                                     double pct = (double)totalRead / total * 100;
                                     job.Progress = pct;
-                                    job.Status = $"{pre}Downloading (Legacy): {pct:0.0}% @ {spd}";
+                                    job.Status = $"{pre}Downloading";
                                 }
                             }
                         }
