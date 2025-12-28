@@ -17,16 +17,26 @@
 
     <div class="collapse mb-2" id="settingsPanel" data-bs-parent=".container">
         <div class="card card-body bg-light border-0 shadow-sm">
-            <h6 class="card-title mb-3">Eporner Configuration</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="card-title mb-0">Scraper Configuration</h6>
+                <button type="button" class="btn btn-outline-dark btn-sm" onclick="reloadConfig()" id="btnHotReload">
+                    <i class="bi bi-arrow-clockwise"></i> Hot Reload Config
+                </button>
+            </div>
+
             <form method="post" asp-page-handler="UpdateSettings">
                 <div class="row g-3">
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <label class="form-label small text-muted">PHPSESSID</label>
-                        <input type="text" class="form-control" asp-for="PhpSessId" placeholder="Paste PHPSESSID cookie..." />
+                        <input type="text" class="form-control" asp-for="PhpSessId" placeholder="Cookie value..." />
                     </div>
-                    <div class="col-md-5">
+                    <div class="col-md-4">
                         <label class="form-label small text-muted">EPRNS</label>
-                        <input type="text" class="form-control" asp-for="Eprns" placeholder="Paste EPRNS cookie..." />
+                        <input type="text" class="form-control" asp-for="Eprns" placeholder="Cookie value..." />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted">Thread Limit</label>
+                        <input type="number" class="form-control" asp-for="Threads" min="1" max="10" />
                     </div>
                     <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-dark w-100">
@@ -34,7 +44,9 @@
                         </button>
                     </div>
                 </div>
-                <div class="form-text mt-2">These cookies are saved to <code>/app/Config/scraper_config.txt</code> and used for Eporner downloads.</div>
+                <div class="form-text mt-2">
+                    Save writes to file. <strong>Hot Reload</strong> applies file changes to active Download Manager immediately.
+                </div>
             </form>
         </div>
     </div>
@@ -67,7 +79,6 @@
             </div>
         </div>
     </div>
-
     <div class="row justify-content-center mb-5 mt-4">
         <div class="col-md-8">
             <div class="card shadow-sm border-0">
@@ -99,7 +110,33 @@
 <script>
     let isInitialized = false;
 
+    // --- Configuration Functions ---
+    function reloadConfig() {
+        const btn = document.getElementById('btnHotReload');
+        const originalHtml = btn.innerHTML;
+
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Reloading...';
+
+        fetch('?handler=ReloadConfig', {
+            method: 'POST',
+            headers: {
+                'RequestVerificationToken': document.getElementsByName('__RequestVerificationToken')[0].value
+            }
+        })
+        .then(res => res.json())
+        .then(data => {
+            alert(data.message);
+        })
+        .catch(err => console.error(err))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = originalHtml;
+        });
+    }
+
     // --- Tor Functions ---
+    // ... (Your existing Tor functions remain unchanged) ...
     function updateTorStatus() {
         fetch('/Downloader?handler=TorStatus')
             .then(response => response.json())
@@ -144,7 +181,6 @@
         .then(res => res.json())
         .then(data => {
             console.log(data.message);
-            // Status update loop will handle UI changes
         })
         .catch(err => {
             console.error(err);

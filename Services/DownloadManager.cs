@@ -1,5 +1,5 @@
 ﻿using System.Collections.Concurrent;
-using System.Text.Json.Serialization; // <--- REQUIRED FOR [JsonIgnore]
+using System.Text.Json.Serialization;
 
 namespace Siphon.Services
 {
@@ -17,9 +17,6 @@ namespace Siphon.Services
         public DateTime? CompletedAt { get; set; }
         public string FinalFilePath { get; set; }
 
-        // --- FIX: Add [JsonIgnore] here ---
-        // This prevents the "IntPtr" crash because this property 
-        // will not be sent to the browser.
         [JsonIgnore]
         public CancellationTokenSource Cts { get; set; } = new CancellationTokenSource();
 
@@ -31,17 +28,72 @@ namespace Siphon.Services
         private readonly ConcurrentDictionary<string, DownloadJob> _jobs = new();
         private readonly IServiceProvider _serviceProvider;
         private readonly PreviewGenerator _previewGenerator;
-        private readonly SemaphoreSlim _semaphore = new(3);
+        private readonly ILogger<DownloadManager> _logger;
 
-        public DownloadManager(IServiceProvider serviceProvider, PreviewGenerator previewGenerator)
+        // Use volatile to ensure thread safety when swapping semaphores during hot reload
+        private volatile SemaphoreSlim _semaphore;
+        private readonly string _configPath;
+        private int _currentThreadLimit = 3;
+
+        public DownloadManager(IServiceProvider serviceProvider, PreviewGenerator previewGenerator, ILogger<DownloadManager> logger)
         {
             _serviceProvider = serviceProvider;
             _previewGenerator = previewGenerator;
+            _logger = logger;
+            _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
+
+            // Initial Config Load
+            LoadAndApplyConfig();
+        }
+
+        public void ReloadConfig()
+        {
+            _logger.LogInformation("Reloading configuration manually requested.");
+            LoadAndApplyConfig();
+        }
+
+        private void LoadAndApplyConfig()
+        {
+            try
+            {
+                int newThreads = 3; // Default
+                if (File.Exists(_configPath))
+                {
+                    var lines = File.ReadAllLines(_configPath);
+                    foreach (var line in lines)
+                    {
+                        if (line.StartsWith("THREADS="))
+                        {
+                            if (int.TryParse(line.Substring(8).Trim(), out int t) && t > 0)
+                            {
+                                newThreads = t;
+                            }
+                        }
+                    }
+                }
+
+                if (_semaphore == null || newThreads != _currentThreadLimit)
+                {
+                    _currentThreadLimit = newThreads;
+                    // Replace the semaphore. Old jobs will release the instance they grabbed.
+                    // New jobs will grab this new one.
+                    _semaphore = new SemaphoreSlim(_currentThreadLimit);
+                    _logger.LogInformation($"Configuration loaded. Concurrency limit set to: {_currentThreadLimit}");
+                }
+                else
+                {
+                    _logger.LogInformation("Configuration reloaded. Thread count unchanged.");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error loading configuration");
+                if (_semaphore == null) _semaphore = new SemaphoreSlim(3);
+            }
         }
 
         public IEnumerable<DownloadJob> GetJobs()
         {
-            // CLEANUP: Remove finished jobs after 5 seconds
             var expiredJobs = _jobs.Values
                 .Where(j => j.CompletedAt.HasValue && (DateTime.UtcNow - j.CompletedAt.Value).TotalSeconds > 5)
                 .Select(j => j.Id)
@@ -56,6 +108,7 @@ namespace Siphon.Services
         {
             var job = new DownloadJob { Url = url };
             _jobs.TryAdd(job.Id, job);
+            _logger.LogInformation($"Job queued: {url} [ID: {job.Id}]");
             Task.Run(() => ProcessJob(job));
         }
 
@@ -67,6 +120,7 @@ namespace Siphon.Services
                 {
                     job.IsCancelled = true;
                     job.Status = "Cancelling...";
+                    _logger.LogInformation($"Job cancellation requested: {job.Id}");
                     try { job.Cts.Cancel(); } catch { }
                 }
             }
@@ -75,10 +129,13 @@ namespace Siphon.Services
         private async Task ProcessJob(DownloadJob job)
         {
             job.Status = "Waiting for slot...";
+
+            // Capture the specific semaphore instance active at this moment
+            SemaphoreSlim currentSemaphore = _semaphore;
+
             try
             {
-                // Wait for a thread slot, respecting the cancel token
-                await _semaphore.WaitAsync(job.Cts.Token);
+                await currentSemaphore.WaitAsync(job.Cts.Token);
             }
             catch (OperationCanceledException)
             {
@@ -89,15 +146,17 @@ namespace Siphon.Services
 
             try
             {
+                _logger.LogInformation($"Starting download for job: {job.Id}");
                 using var scope = _serviceProvider.CreateScope();
+                // VideoDownloader will reload config internally on instantiation to get fresh Cookies
                 var downloader = scope.ServiceProvider.GetRequiredService<VideoDownloader>();
 
                 await downloader.ProcessDownload(job);
 
-                // If not cancelled, trigger preview generation
                 if (!job.IsCancelled)
                 {
                     job.CompletedAt = DateTime.UtcNow;
+                    _logger.LogInformation($"Job completed successfully: {job.Id}");
                     if (!string.IsNullOrEmpty(job.FinalFilePath) && File.Exists(job.FinalFilePath))
                     {
                         _previewGenerator.QueueGeneration(job.FinalFilePath);
@@ -109,16 +168,19 @@ namespace Siphon.Services
                 job.Status = "Cancelled";
                 job.IsError = true;
                 job.CompletedAt = DateTime.UtcNow;
+                _logger.LogWarning($"Job cancelled during process: {job.Id}");
             }
             catch (Exception ex)
             {
                 job.Status = $"Failed: {ex.Message}";
                 job.IsError = true;
                 job.CompletedAt = DateTime.UtcNow;
+                _logger.LogError(ex, ($"Job failed: {job.Id}"));
             }
             finally
             {
-                _semaphore.Release();
+                // Release the specific semaphore instance we waited on
+                currentSemaphore.Release();
                 try { job.Cts.Dispose(); } catch { }
             }
         }

@@ -175,6 +175,22 @@ namespace Siphon.Services
             return false;
         }
 
-        private void LoadLegacyConfig() { try { if (File.Exists(_configPath)) { /* ... */ } } catch { } }
+        private void LoadLegacyConfig()
+        {
+            try
+            {
+                if (File.Exists(_configPath))
+                {
+                    var lines = File.ReadAllLines(_configPath);
+                    foreach (var line in lines)
+                    {
+                        var trimmed = line.Trim();
+                        if (trimmed.StartsWith("PHPSESSID=")) _phpSessId = trimmed.Substring(10).Trim();
+                        if (trimmed.StartsWith("EPRNS=")) _eprns = trimmed.Substring(6).Trim();
+                    }
+                }
+            }
+            catch { }
+        }
     }
 }

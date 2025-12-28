@@ -8,14 +8,13 @@ namespace Siphon.Pages
     public class DownloaderModel : PageModel
     {
         private readonly DownloadManager _downloadManager;
-        private readonly TorProxyManager _torManager; // Injected Tor Manager
+        private readonly TorProxyManager _torManager;
         private readonly string _configPath;
 
         public DownloaderModel(DownloadManager downloadManager, TorProxyManager torManager)
         {
             _downloadManager = downloadManager;
             _torManager = torManager;
-            // Config location mapped in Docker
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
         }
 
@@ -30,6 +29,9 @@ namespace Siphon.Pages
 
         [BindProperty]
         public string Eprns { get; set; }
+
+        [BindProperty]
+        public int Threads { get; set; } = 3; // Default
 
         public void OnGet()
         {
@@ -52,6 +54,14 @@ namespace Siphon.Pages
             return RedirectToPage();
         }
 
+        // NEW: Handler for Hot Reload Button
+        public IActionResult OnPostReloadConfig()
+        {
+            // Trigger logic in Manager (reloads threads)
+            _downloadManager.ReloadConfig();
+            return new JsonResult(new { success = true, message = "Configuration reloaded successfully." });
+        }
+
         // --- AJAX Handlers ---
 
         public IActionResult OnGetStatus()
@@ -65,7 +75,6 @@ namespace Siphon.Pages
             return new JsonResult(new { success = true });
         }
 
-        // NEW: Tor Status Handler
         public IActionResult OnGetTorStatus()
         {
             return new JsonResult(new
@@ -76,14 +85,9 @@ namespace Siphon.Pages
             });
         }
 
-        // NEW: Tor Reset Handler
         public async Task<IActionResult> OnPostResetTor()
         {
-            // Trigger the rebuild in background or wait for it? 
-            // Better to fire and forget here or just await the signal sending.
-            // We await the method which sets "IsRotating" to true immediately.
             _ = _torManager.RebuildCircuitAsync();
-
             return new JsonResult(new { success = true, message = "Tor circuit rebuild initiated." });
         }
 
@@ -98,8 +102,13 @@ namespace Siphon.Pages
                     var lines = System.IO.File.ReadAllLines(_configPath);
                     foreach (var line in lines)
                     {
-                        if (line.StartsWith("PHPSESSID=")) PhpSessId = line.Substring(10).Trim();
-                        if (line.StartsWith("EPRNS=")) Eprns = line.Substring(6).Trim();
+                        var trimmed = line.Trim();
+                        if (trimmed.StartsWith("PHPSESSID=")) PhpSessId = trimmed.Substring(10).Trim();
+                        if (trimmed.StartsWith("EPRNS=")) Eprns = trimmed.Substring(6).Trim();
+                        if (trimmed.StartsWith("THREADS="))
+                        {
+                            if (int.TryParse(trimmed.Substring(8).Trim(), out int t)) Threads = t;
+                        }
                     }
                 }
             }
@@ -114,8 +123,8 @@ namespace Siphon.Pages
                 {
                     $"PHPSESSID={PhpSessId}",
                     $"EPRNS={Eprns}",
-                    "THREADS=3", // Hardcoded as managed by Semaphore
-                    "PATH=/app/wwwroot/Pending" // Hardcoded container path
+                    $"THREADS={Threads}",
+                    "PATH=/app/wwwroot/Pending"
                 };
 
                 var dir = Path.GetDirectoryName(_configPath);
