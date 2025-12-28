@@ -363,3 +363,7 @@ MigrationBackup/
 FodyWeavers.xsd
 /Config/scraper_config.txt
 /Config/userConfig.json
+
+wwwroot/Pending/
+wwwroot/Approved/
+
