@@ -6,7 +6,10 @@
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-hourglass-split"></i> Pending Approval</h2>
+        <div>
+            <h2 class="fw-bold mb-0"><i class="bi bi-hourglass-split text-primary"></i> Pending Approval</h2>
+            <small class="text-muted">Review downloaded content before archiving.</small>
+        </div>
         <a asp-page="/Downloader" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left"></i> Back to Downloader
         </a>
@@ -14,77 +17,104 @@
 
     @if (Model.Files.Count == 0)
     {
-        <div class="alert alert-success text-center py-5 shadow-sm rounded-3">
-            <i class="bi bi-check-circle-fill text-success fs-1 mb-3"></i>
-            <h4 class="fw-bold">All Caught Up!</h4>
-            <p class="mb-0 text-muted">No pending files waiting for approval.</p>
+        <div class="text-center py-5 mt-5">
+            <div class="mb-3">
+                <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+            </div>
+            <h3 class="fw-bold">All Caught Up!</h3>
+            <p class="text-muted">No pending files waiting for approval.</p>
+            <a asp-page="/Downloader" class="btn btn-primary mt-3">
+                <i class="bi bi-plus-lg"></i> Add More Downloads
+            </a>
         </div>
     }
-
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
-        @foreach (var file in Model.Files)
-        {
-            <div class="col">
-                <div class="card h-100 shadow-sm border-0">
-
-                    <div class="position-relative bg-black rounded-top overflow-hidden" style="padding-top: 56.25%;">
-
-                        @if (file.IsProcessing)
-                        {
-                            <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark text-white">
-                                <div class="spinner-border text-light mb-2" role="status"></div>
-                                <small>Generating Preview...</small>
-                                <script>setTimeout(() => window.location.reload(), 3000);</script>
-                            </div>
-                        }
-                        else
-                        {
-                            <video class="position-absolute top-0 start-0 w-100 h-100"
-                                   src="@file.PreviewVideoUrl"
-                                   poster="@file.ThumbPath"
-                                   muted
-                                   loop
-                                   preload="none"
-                                   onmouseover="this.play()"
-                                   onmouseout="this.pause();"
-                                   onerror="this.src='@file.OriginalVideoUrl'"
-                                   style="object-fit: cover; cursor: pointer;">
-                            </video>
-
-                            <span class="position-absolute bottom-0 end-0 badge bg-dark m-2 opacity-75">
-                                <i class="bi bi-play-fill"></i> Hover
-                            </span>
-                        }
-                    </div>
-
-                    <div class="card-body">
-                        <h6 class="card-title text-truncate fw-bold mb-3" title="@file.Name">
-                            @file.Name
-                        </h6>
-
-                        <div class="d-grid gap-2">
+    else
+    {
+        <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 row-cols-xl-4 g-4">
+            @foreach (var file in Model.Files)
+            {
+                <div class="col">
+                    <div class="card h-100 shadow-sm border-0">
+                        <div class="position-relative bg-black rounded-top overflow-hidden" style="padding-top: 56.25%;">
                             @if (file.IsProcessing)
                             {
-                                <button class="btn btn-secondary disabled">Processing...</button>
+                                <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark text-white">
+                                    <div class="spinner-border text-light mb-2" role="status"></div>
+                                    <small>Generating Preview...</small>
+                                    <script>setTimeout(() => window.location.reload(), 3000);</script>
+                                </div>
                             }
                             else
                             {
-                                <form method="post" class="d-flex gap-2">
-                                    <input type="hidden" name="fileName" value="@file.Name" />
+                                <video class="position-absolute top-0 start-0 w-100 h-100"
+                                       src="@file.PreviewVideoUrl"
+                                       poster="@file.ThumbPath"
+                                       muted
+                                       loop
+                                       preload="none"
+                                       onmouseover="this.play()"
+                                       onmouseout="this.pause();"
+                                       onerror="this.src='@file.OriginalVideoUrl'"
+                                       style="object-fit: cover; cursor: pointer;">
+                                </video>
 
-                                    <button type="submit" asp-page-handler="Approve" class="btn btn-success flex-grow-1">
-                                        <i class="bi bi-check-lg"></i> Approve
-                                    </button>
-
-                                    <button type="submit" asp-page-handler="Deny" class="btn btn-danger flex-grow-1">
-                                        <i class="bi bi-trash"></i> Deny
-                                    </button>
-                                </form>
+                                <span class="position-absolute bottom-0 end-0 badge bg-dark m-2 opacity-75">
+                                    <i class="bi bi-play-fill"></i> Hover
+                                </span>
                             }
+                        </div>
+
+                        <div class="card-body">
+                            <h6 class="card-title text-truncate fw-bold mb-3" title="@file.Name">
+                                @file.Name
+                            </h6>
+
+                            <div class="d-grid gap-2">
+                                @if (file.IsProcessing)
+                                {
+                                    <button class="btn btn-secondary disabled">Processing...</button>
+                                }
+                                else
+                                {
+                                    <form method="post" class="d-flex gap-2">
+                                        <input type="hidden" name="fileName" value="@file.Name" />
+
+                                        @if (Model.ApprovalDirectories.Count > 1)
+                                        {
+                                            <div class="btn-group flex-grow-1">
+                                                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="bi bi-check-lg"></i> Approve
+                                                </button>
+                                                <ul class="dropdown-menu w-100">
+                                                    @foreach (var dir in Model.ApprovalDirectories)
+                                                    {
+                                                        <li>
+                                                            <button type="submit" asp-page-handler="Approve" name="targetDir" value="@dir" class="dropdown-item d-flex align-items-center gap-2">
+                                                                <i class="bi bi-folder2-open text-warning"></i>
+                                                                <span>@dir.Replace("Extra_Approved/", "")</span>
+                                                            </button>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" asp-page-handler="Approve" name="targetDir" value="Approved" class="btn btn-success flex-grow-1">
+                                                <i class="bi bi-check-lg"></i> Approve
+                                            </button>
+                                        }
+
+                                        <button type="submit" asp-page-handler="Deny" class="btn btn-outline-danger" title="Deny / Delete Permanently">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        }
-    </div>
+            }
+        </div>
+    }
 </div>

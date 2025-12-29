@@ -16,9 +16,30 @@
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            // Start timer: Run Cleanup immediately, then every 1 hour
-            _timer = new Timer(CleanupFiles, null, TimeSpan.Zero, TimeSpan.FromHours(1));
+            // 1. Get the configured time on startup
+            int intervalMinutes = _userService.GetPreservationMinutes();
+            if (intervalMinutes <= 0) intervalMinutes = 60; // Safety default
+
+            _logger.LogInformation($"Retention Service started. Schedule: Every {intervalMinutes} minutes.");
+
+            // Start timer: Run immediately once (TimeSpan.Zero), then repeat every 'intervalMinutes'
+            _timer = new Timer(CleanupFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(intervalMinutes));
+
             return Task.CompletedTask;
+        }
+
+        // --- NEW: Update the timer without forcing immediate execution ---
+        public void UpdateTimerInterval()
+        {
+            int newMinutes = _userService.GetPreservationMinutes();
+            if (newMinutes <= 0) newMinutes = 60;
+
+            _logger.LogInformation($"Retention Interval updated. Next check in {newMinutes} minutes.");
+
+            // Change(dueTime, period)
+            // dueTime = newMinutes (Wait this long before the next run)
+            // period = newMinutes (Repeat interval)
+            _timer?.Change(TimeSpan.FromMinutes(newMinutes), TimeSpan.FromMinutes(newMinutes));
         }
 
         private void CleanupFiles(object state)
@@ -26,7 +47,6 @@
             try
             {
                 int maxMinutes = _userService.GetPreservationMinutes();
-                // If set to 0 or negative (disabled), do nothing
                 if (maxMinutes <= 0) return;
 
                 var pendingDir = Path.Combine(_env.WebRootPath, "Pending");

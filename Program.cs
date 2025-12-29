@@ -15,6 +15,7 @@ namespace Siphon
             builder.Services.AddSingleton<DownloadManager>();
             builder.Services.AddTransient<VideoDownloader>();
             builder.Services.AddSingleton<PreviewGenerator>();
+            builder.Services.AddSingleton<RetentionService>();
             // Bootstrapper MUST run before TorProxyManager
             // 1. Register SystemBootstrapper as Singleton (so we can call RestartTorAsync)
             builder.Services.AddSingleton<SystemBootstrapper>();

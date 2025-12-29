@@ -1,0 +1,123 @@
+﻿@page
+@model Siphon.Pages.SettingsModel
+@{
+    ViewData["Title"] = "Settings";
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-6">
+
+            <div class="text-center mb-5">
+                <div class="mb-3">
+                    <i class="bi bi-gear-fill text-primary" style="font-size: 4rem;"></i>
+                </div>
+                <h1 class="display-5 fw-bold">Settings</h1>
+                <p class="lead text-muted">
+                    Configure accounts, retention policies, and storage paths.
+                </p>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-body p-4 p-md-5">
+
+                    @if (TempData["Message"] != null)
+                    {
+                        <div class="alert alert-success d-flex align-items-center mb-4 shadow-sm border-0" role="alert">
+                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <div>@TempData["Message"]</div>
+                        </div>
+                    }
+
+                    <form method="post">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2">Admin Account</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Username</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-person"></i></span>
+                                    <input type="text" class="form-control border-start-0" asp-for="Username" placeholder="Admin" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Password</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-key"></i></span>
+                                    <input type="password" class="form-control border-start-0" asp-for="Password" placeholder="(Unchanged)" />
+                                </div>
+                                <div class="form-text small">Leave blank to keep current password.</div>
+                            </div>
+                        </div>
+
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Cleanup Policy</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Auto-Delete Pending Files After</label>
+                                <input type="number" class="form-control" asp-for="RetentionValue" min="1" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Unit</label>
+                                <select class="form-select" asp-for="RetentionUnit">
+                                    <option value="Minutes">Minutes</option>
+                                    <option value="Hours">Hours</option>
+                                    <option value="Days">Days</option>
+                                    <option value="Weeks">Weeks</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted"><i class="bi bi-info-circle"></i> Files left in "Pending" longer than this duration will be automatically removed.</small>
+                            </div>
+                        </div>
+
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Storage Folders</h6>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small mb-2">Extra Approval Directories</label>
+
+                            <div id="dir-container">
+                                @foreach (var dir in Model.ExtraDirectories)
+                                {
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text bg-light text-muted font-monospace small">Extra_Approved/</span>
+                                        <input type="text" class="form-control" name="ExtraDirectories" value="@dir" />
+                                        <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                }
+                            </div>
+
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addDirInput()">
+                                <i class="bi bi-plus-lg"></i> Add New Folder
+                            </button>
+                        </div>
+
+                        <div class="d-grid gap-3 mt-5">
+                            <button type="submit" class="btn btn-primary btn-lg py-3 shadow-sm">
+                                <i class="bi bi-arrow-repeat me-2"></i> Save & Apply Settings
+                            </button>
+                            <a asp-page="/Index" class="btn btn-link text-decoration-none text-muted">
+                                Cancel and return Home
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function addDirInput() {
+        const container = document.getElementById('dir-container');
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        div.innerHTML = `
+            <span class="input-group-text bg-light text-muted font-monospace small">Extra_Approved/</span>
+            <input type="text" class="form-control" name="ExtraDirectories" placeholder="New Folder Name" />
+            <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+        container.appendChild(div);
+    }
+</script>

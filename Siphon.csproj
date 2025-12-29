@@ -16,7 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Config\" />
     <Folder Include="wwwroot\Approved\" />
+    <Folder Include="wwwroot\Extra_Approved\" />
+    <Folder Include="wwwroot\Extra_Approved\New\" />
+    <Folder Include="wwwroot\Extra_Approved\TESTING\" />
     <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
   </ItemGroup>

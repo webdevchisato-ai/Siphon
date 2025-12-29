@@ -6,68 +6,129 @@
 }
 
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Setup Siphon</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <style>
         body {
             background-color: #f8f9fa;
-            height: 100vh;
+            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
         }
-
-        .setup-card {
-            width: 100%;
-            max-width: 450px;
-            border-radius: 15px;
-        }
     </style>
 </head>
 <body>
-    <div class="card setup-card shadow border-0">
-        <div class="card-body p-5">
-            <h2 class="text-center mb-4 fw-bold text-primary">Setup Siphon</h2>
-            <p class="text-muted text-center mb-4">Configure your admin account and preferences.</p>
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-xl-6">
 
-            <form method="post">
-                <h6 class="border-bottom pb-2 mb-3 text-uppercase small text-muted font-weight-bold">Account</h6>
-
-                <div class="mb-3">
-                    <label class="form-label">Username</label>
-                    <input type="text" class="form-control" asp-for="Username" />
-                </div>
-                <div class="mb-4">
-                    <label class="form-label">Password</label>
-                    <input type="password" class="form-control" asp-for="Password" required />
-                </div>
-
-                <h6 class="border-bottom pb-2 mb-3 mt-4 text-uppercase small text-muted font-weight-bold">Cleanup Policy</h6>
-
-                <div class="mb-2">
-                    <label class="form-label">Pending File Retention</label>
-                    <div class="input-group">
-                        <input type="number" class="form-control" asp-for="RetentionValue" min="1" required />
-                        <select class="form-select" asp-for="RetentionUnit" style="max-width: 120px;">
-                            <option value="Minutes">Minutes</option>
-                            <option value="Hours">Hours</option>
-                            <option value="Days">Days</option>
-                            <option value="Weeks">Weeks</option>
-                            <option value="Months">Months</option>
-                            <option value="Years">Years</option>
-                        </select>
+                <div class="text-center mb-5">
+                    <div class="mb-3">
+                        <i class="bi bi-rocket-takeoff-fill text-primary" style="font-size: 4rem;"></i>
                     </div>
-                    <div class="form-text">
-                        Files in "Pending" older than this will be automatically deleted.
-                    </div>
+                    <h1 class="display-5 fw-bold">Welcome to Siphon</h1>
+                    <p class="lead text-muted">
+                        Secure, Dockerized Video Downloader routed via Tor.
+                    </p>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100 py-2 mt-4">Complete Setup</button>
-            </form>
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-body p-4 p-md-5">
+
+                        <p class="text-center text-muted mb-4">Please configure your initial preferences to get started.</p>
+
+                        <form method="post">
+
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2">Admin Account</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Username</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-person"></i></span>
+                                        <input type="text" class="form-control border-start-0" asp-for="Username" placeholder="Admin" required />
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Password</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-key"></i></span>
+                                        <input type="password" class="form-control border-start-0" asp-for="Password" placeholder="••••••" required />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Cleanup Policy</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Auto-Delete Pending Files After</label>
+                                    <input type="number" class="form-control" asp-for="RetentionValue" min="1" required />
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Unit</label>
+                                    <select class="form-select" asp-for="RetentionUnit">
+                                        <option value="Minutes">Minutes</option>
+                                        <option value="Hours">Hours</option>
+                                        <option value="Days">Days</option>
+                                        <option value="Weeks">Weeks</option>
+                                    </select>
+                                </div>
+                                <div class="col-12">
+                                    <small class="text-muted"><i class="bi bi-info-circle"></i> Files left in "Pending" longer than this duration will be automatically removed.</small>
+                                </div>
+                            </div>
+
+                            <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Storage Folders</h6>
+                            <div class="mb-4">
+                                <label class="form-label fw-bold small mb-2">Extra Approval Directories</label>
+
+                                <div id="dir-container">
+                                    <div class="input-group mb-2">
+                                        <span class="input-group-text bg-light text-muted font-monospace small">Extra_Approved/</span>
+                                        <input type="text" class="form-control" name="ExtraDirectories" placeholder="e.g. Archive" />
+                                    </div>
+                                </div>
+
+                                <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addDirInput()">
+                                    <i class="bi bi-plus-lg"></i> Add Folder
+                                </button>
+                                <div class="form-text mt-2">
+                                    Files can always be saved to the default "Approved" folder. Add extra folders here to categorize downloads.
+                                </div>
+                            </div>
+
+                            <div class="d-grid mt-5">
+                                <button type="submit" class="btn btn-primary btn-lg py-3 shadow-sm fw-bold">
+                                    Complete Setup <i class="bi bi-arrow-right ms-2"></i>
+                                </button>
+                            </div>
+
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
+    <script>
+        function addDirInput() {
+            const container = document.getElementById('dir-container');
+            const div = document.createElement('div');
+            div.className = 'input-group mb-2';
+            div.innerHTML = `
+                <span class="input-group-text bg-light text-muted font-monospace small">Extra_Approved/</span>
+                <input type="text" class="form-control" name="ExtraDirectories" placeholder="Folder Name" />
+                <button class="btn btn-outline-danger" type="button" onclick="this.parentElement.remove()">
+                    <i class="bi bi-x-lg"></i>
+                </button>
+            `;
+            container.appendChild(div);
+        }
+    </script>
 </body>
 </html>

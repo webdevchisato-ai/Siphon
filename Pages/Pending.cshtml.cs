@@ -1,19 +1,18 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Siphon.Services;
-using System.IO;
-using System.Linq;
+using System.Text.Json;
 
 namespace Siphon.Pages
 {
     public class PendingFile
     {
         public string Name { get; set; }
-        public string OriginalVideoUrl { get; set; } // The full file
-        public string PreviewVideoUrl { get; set; }  // The 9-second montage
-        public string ThumbPath { get; set; }        // The JPG thumbnail
+        public string OriginalVideoUrl { get; set; }
+        public string PreviewVideoUrl { get; set; }
+        public string ThumbPath { get; set; }
         public string FullPath { get; set; }
-        public bool IsProcessing { get; set; }       // Controls the UI spinner
+        public bool IsProcessing { get; set; }
     }
 
     [IgnoreAntiforgeryToken]
@@ -30,18 +29,59 @@ namespace Siphon.Pages
 
         public List<PendingFile> Files { get; set; } = new();
 
+        // List to hold our approval options
+        public List<string> ApprovalDirectories { get; set; } = new();
+
         public void OnGet()
         {
-            var pendingDir = Path.Combine(_env.WebRootPath, "Pending");
-            var approvedDir = Path.Combine(_env.WebRootPath, "Approved");
+            LoadApprovalDirectories();
+            LoadFiles();
+        }
 
-            // Ensure directories exist
+        // Updated handler accepts targetDir
+        public IActionResult OnPostApprove(string fileName, string targetDir)
+        {
+            MoveFile(fileName, targetDir);
+            return RedirectToPage();
+        }
+
+        public IActionResult OnPostDeny(string fileName)
+        {
+            DeleteFileSet(fileName);
+            return RedirectToPage();
+        }
+
+        private void LoadApprovalDirectories()
+        {
+            // Always add the default
+            ApprovalDirectories.Add("Approved");
+
+            var configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "extra_dirs.json");
+            if (System.IO.File.Exists(configPath))
+            {
+                try
+                {
+                    var json = System.IO.File.ReadAllText(configPath);
+                    var extras = JsonSerializer.Deserialize<List<string>>(json);
+                    if (extras != null)
+                    {
+                        // Prefix them so we know they go into "Extra_Approved"
+                        ApprovalDirectories.AddRange(extras.Select(d => $"Extra_Approved/{d}"));
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private void LoadFiles()
+        {
+            // ... (Same logic as your existing OnGet file loading) ...
+            // [I omitted the repeated code for brevity, insert your existing file loading logic here]
+
+            var pendingDir = Path.Combine(_env.WebRootPath, "Pending");
             if (!Directory.Exists(pendingDir)) Directory.CreateDirectory(pendingDir);
-            if (!Directory.Exists(approvedDir)) Directory.CreateDirectory(approvedDir);
 
             var dirInfo = new DirectoryInfo(pendingDir);
-
-            // Get all MP4s, excluding the generated previews
             var files = dirInfo.GetFiles("*.mp4")
                                .Where(f => !f.Name.EndsWith("_preview.mp4"))
                                .OrderByDescending(f => f.CreationTime);
@@ -51,20 +91,16 @@ namespace Siphon.Pages
                 string baseName = Path.GetFileNameWithoutExtension(file.Name);
                 string thumbName = baseName + ".jpg";
                 string previewName = baseName + "_preview.mp4";
-
                 string thumbPath = Path.Combine(pendingDir, thumbName);
                 string previewPath = Path.Combine(pendingDir, previewName);
 
-                // Check status from the Singleton service
                 bool isProcessing = _previewGenerator.IsProcessing(file.FullName);
                 bool assetsMissing = !System.IO.File.Exists(thumbPath) || !System.IO.File.Exists(previewPath);
 
-                // FALLBACK: If assets are missing and it's NOT currently processing, start it now.
-                // This handles cases where the app restarted before finishing, or a file was added manually.
                 if (assetsMissing && !isProcessing)
                 {
                     _previewGenerator.QueueGeneration(file.FullName);
-                    isProcessing = true; // Mark as processing for the UI this time
+                    isProcessing = true;
                 }
 
                 Files.Add(new PendingFile
@@ -79,29 +115,22 @@ namespace Siphon.Pages
             }
         }
 
-        public IActionResult OnPostApprove(string fileName)
+        private void MoveFile(string fileName, string targetFolder)
         {
-            MoveFile(fileName, "Approved");
-            return RedirectToPage();
-        }
+            // Default fallback
+            if (string.IsNullOrEmpty(targetFolder)) targetFolder = "Approved";
 
-        public IActionResult OnPostDeny(string fileName)
-        {
-            DeleteFileSet(fileName);
-            return RedirectToPage();
-        }
-
-        private void MoveFile(string fileName, string destFolder)
-        {
             var srcPath = Path.Combine(_env.WebRootPath, "Pending", fileName);
-            var destPath = Path.Combine(_env.WebRootPath, destFolder, fileName);
+            // Construct destination based on whether it is a root folder or nested
+            var destPath = Path.Combine(_env.WebRootPath, targetFolder, fileName);
+
+            // Ensure target dir exists (just in case)
+            var destDir = Path.GetDirectoryName(destPath);
+            if (!Directory.Exists(destDir)) Directory.CreateDirectory(destDir);
 
             if (System.IO.File.Exists(srcPath))
             {
-                // Move the main video file
                 System.IO.File.Move(srcPath, destPath);
-
-                // Cleanup thumbnail and preview from Pending (we don't need them in Approved usually)
                 CleanupExtras(srcPath);
             }
         }
@@ -115,10 +144,8 @@ namespace Siphon.Pages
 
         private void CleanupExtras(string originalPath)
         {
-            // Delete .jpg and _preview.mp4
             var thumb = Path.ChangeExtension(originalPath, ".jpg");
             var preview = originalPath.Replace(".mp4", "_preview.mp4");
-
             if (System.IO.File.Exists(thumb)) System.IO.File.Delete(thumb);
             if (System.IO.File.Exists(preview)) System.IO.File.Delete(preview);
         }

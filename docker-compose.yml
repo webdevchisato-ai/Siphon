@@ -8,6 +8,9 @@ services:
       - ./Downloads:/app/wwwroot/Pending
       # NEW: Map the Approved folder
       - ./Approved:/app/wwwroot/Approved
+      # and extra approved directories you want to add, need to be mounted here otherwise you would not see them in the host
+      # in the formate where anything in {} is to be replaced
+      # - {host dir}:/app/wwwroot/Extra_Approved/{dir name}
     restart: unless-stopped
     environment:
       - ASPNETCORE_HTTP_PORTS=8080
