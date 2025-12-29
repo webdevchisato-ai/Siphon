@@ -2,7 +2,8 @@
 using System.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using System.Net; // Required for WebProxy
+using System.Net;
+using System.Text;
 
 namespace Siphon.Services
 {
@@ -46,12 +47,16 @@ namespace Siphon.Services
                 if (token.IsCancellationRequested) throw new OperationCanceledException();
 
                 job.Status = "yt-dlp failed. Reverting...";
+                _logger.LogWarning($"[Legacy Switch] yt-dlp failed for {job.Url}. Attempting legacy downloaders.");
+
                 await Task.Delay(1000, token);
 
                 if (job.Url.Contains("eporner.com"))
                     await new EpornerDownloader(_downloadPath, job.Url, job, _phpSessId, _eprns).Download(token);
                 else if (job.Url.Contains("pornhub.com"))
                     await new PornHubDownloader(_downloadPath, "https://pornhubfans.com", job.Url, job).Download(token);
+                else if (job.Url.Contains("hanime.tv"))
+                    await new HanimeDownloader(_downloadPath, job.Url, job).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 
@@ -72,6 +77,9 @@ namespace Siphon.Services
             }
         }
 
+        // ... (Keep existing FetchMetadata, TryYtDlp, TryDownloadRule34ThumbnailAsync, LoadLegacyConfig exactly as they were) ...
+        // [Copy the rest of your VideoDownloader class here]
+
         private async Task FetchMetadata(DownloadJob job, CancellationToken token)
         {
             job.Status = "Fetching info...";
@@ -88,23 +96,21 @@ namespace Siphon.Services
                 };
 
                 using var process = new Process { StartInfo = startInfo };
-                string jsonOutput = "";
-                process.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) jsonOutput += e.Data; };
+                StringBuilder jsonOutput = new StringBuilder();
+                process.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) jsonOutput.Append(e.Data); };
 
                 process.Start();
                 process.BeginOutputReadLine();
                 await process.WaitForExitAsync(token).WaitAsync(TimeSpan.FromSeconds(60), token);
 
-                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(jsonOutput))
+                if (process.ExitCode == 0 && jsonOutput.Length > 0)
                 {
-                    var node = JsonNode.Parse(jsonOutput);
+                    var node = JsonNode.Parse(jsonOutput.ToString());
                     string title = node?["title"]?.ToString();
                     string thumb = node?["thumbnail"]?.ToString();
 
-                    // --- UPDATED LOGIC HERE ---
                     if (job.Url.Contains("rule34video.com"))
                     {
-                        // Use the job ID to name the file locally
                         thumb = await TryDownloadRule34ThumbnailAsync(job.Url, job.Id);
                     }
 
@@ -149,7 +155,6 @@ namespace Siphon.Services
                                 job.Progress = p;
                                 job.Status = $"Downloading";
                             }
-
                             var matchSpd = Regex.Match(e.Data, @"at\s+(\d+\.?\d*\w+/s)");
                             if (matchSpd.Success)
                             {
@@ -160,7 +165,6 @@ namespace Siphon.Services
 
                     process.Start();
                     process.BeginOutputReadLine();
-
                     await process.WaitForExitAsync(token);
 
                     if (process.ExitCode == 0)
@@ -180,51 +184,27 @@ namespace Siphon.Services
             return false;
         }
 
-        // --- UPDATED RULE34 LOGIC ---
         private async Task<string> TryDownloadRule34ThumbnailAsync(string videoUrl, string jobId)
         {
             _logger.LogInformation("Rule34Video Url Identified, Attempting to download preview image");
-
-            // 1. Setup Local Directory
             string previewDir = Path.Combine(_env.WebRootPath, "PreviewImages");
             if (!Directory.Exists(previewDir)) Directory.CreateDirectory(previewDir);
-
-            // 2. Prepare Default Fallback
             string defaultRemote = "https://rule34video.com/favicon.ico";
-
-            // 3. Extract ID and Calculate Group
             long id = 0;
             long groupId = 0;
             string baseUrl = null;
-
             var match = Regex.Match(videoUrl, @"/video/(\d+)");
             if (match.Success && long.TryParse(match.Groups[1].Value, out id))
             {
                 groupId = (id / 1000) * 1000;
                 baseUrl = $"https://rule34video.com/contents/videos_screenshots/{groupId}/{id}";
             }
-            else
-            {
-                _logger.LogInformation($"Failed to extract ID. Using default icon.");
-            }
-
-            string[] suffixes =
-            {
-                "preview_720p.mp4.jpg",
-                "preview_1080p.mp4.jpg",
-                "preview_480p.mp4.jpg",
-                "preview_360p.mp4.jpg",
-                "preview.mp4.jpg"
-            };
-
-            // 4. Configure Tor Proxy Client
+            string[] suffixes = { "preview_720p.mp4.jpg", "preview_1080p.mp4.jpg", "preview_480p.mp4.jpg", "preview_360p.mp4.jpg", "preview.mp4.jpg" };
             try
             {
                 var proxy = new WebProxy("socks5://127.0.0.1:9050");
                 var handler = new HttpClientHandler { Proxy = proxy };
                 using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
-
-                // A. Try specific previews if we have an ID
                 if (baseUrl != null)
                 {
                     foreach (var suffix in suffixes)
@@ -234,36 +214,27 @@ namespace Siphon.Services
                         {
                             var request = new HttpRequestMessage(HttpMethod.Get, candidateUrl);
                             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-
                             if (response.IsSuccessStatusCode)
                             {
-                                // Found valid image! Download it.
                                 string extension = ".jpg";
                                 string localFileName = $"{jobId}{extension}";
                                 string savePath = Path.Combine(previewDir, localFileName);
-
                                 using (var stream = await response.Content.ReadAsStreamAsync())
                                 using (var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write))
                                 {
                                     await stream.CopyToAsync(fileStream);
                                 }
-
-                                _logger.LogInformation($"Downloaded preview to {localFileName}");
                                 return $"/PreviewImages/{localFileName}";
                             }
                         }
-                        catch { /* Try next suffix */ }
+                        catch { }
                     }
                 }
-
-                // B. Fallback: Download the favicon
-                _logger.LogInformation("Downloading default favicon...");
                 using var icoResponse = await client.GetAsync(defaultRemote);
                 if (icoResponse.IsSuccessStatusCode)
                 {
                     string localFileName = $"{jobId}.ico";
                     string savePath = Path.Combine(previewDir, localFileName);
-
                     using (var stream = await icoResponse.Content.ReadAsStreamAsync())
                     using (var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write))
                     {
@@ -276,8 +247,6 @@ namespace Siphon.Services
             {
                 _logger.LogError($"Error downloading Rule34 thumbnail via Tor: {ex.Message}");
             }
-
-            // Absolute failsafe if Tor fails entirely
             return "/favicon.ico";
         }
 

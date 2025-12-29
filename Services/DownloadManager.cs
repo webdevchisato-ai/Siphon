@@ -29,7 +29,7 @@ namespace Siphon.Services
         private readonly IServiceProvider _serviceProvider;
         private readonly PreviewGenerator _previewGenerator;
         private readonly ILogger<DownloadManager> _logger;
-        private readonly IWebHostEnvironment _env; // Added Env
+        private readonly IWebHostEnvironment _env;
 
         private volatile SemaphoreSlim _semaphore;
         private readonly string _configPath;
@@ -40,7 +40,7 @@ namespace Siphon.Services
             _serviceProvider = serviceProvider;
             _previewGenerator = previewGenerator;
             _logger = logger;
-            _env = env; // Store Env
+            _env = env;
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
 
             LoadAndApplyConfig();
@@ -121,7 +121,8 @@ namespace Siphon.Services
                     _logger.LogInformation($"Job cancellation requested: {job.Id}");
                     try { job.Cts.Cancel(); } catch { }
 
-                    // Cleanup preview immediately on cancel request
+                    // Immediate Cleanup on Cancel Request
+                    CleanupJobFiles(job);
                     CleanupPreview(job.Id);
                 }
             }
@@ -141,6 +142,7 @@ namespace Siphon.Services
             {
                 job.Status = "Cancelled";
                 job.CompletedAt = DateTime.UtcNow;
+                CleanupJobFiles(job);
                 CleanupPreview(job.Id);
                 return;
             }
@@ -169,6 +171,9 @@ namespace Siphon.Services
                 job.IsError = true;
                 job.CompletedAt = DateTime.UtcNow;
                 _logger.LogWarning($"Job cancelled during process: {job.Id}");
+
+                // Cleanup on Cancel
+                CleanupJobFiles(job);
             }
             catch (Exception ex)
             {
@@ -176,14 +181,47 @@ namespace Siphon.Services
                 job.IsError = true;
                 job.CompletedAt = DateTime.UtcNow;
                 _logger.LogError(ex, ($"Job failed: {job.Id}"));
+
+                // Cleanup on Error
+                CleanupJobFiles(job);
             }
             finally
             {
                 currentSemaphore.Release();
                 try { job.Cts.Dispose(); } catch { }
-
-                // Cleanup the downloaded preview image
                 CleanupPreview(job.Id);
+            }
+        }
+
+        private void CleanupJobFiles(DownloadJob job)
+        {
+            try
+            {
+                // 1. Delete the "Final" file if it was partially created
+                if (!string.IsNullOrEmpty(job.FinalFilePath) && File.Exists(job.FinalFilePath))
+                {
+                    File.Delete(job.FinalFilePath);
+                    _logger.LogDebug($"Cleaned up file: {job.FinalFilePath}");
+                }
+
+                // 2. Clean up partial downloads (e.g. .mp4.part, .ytdl, etc.)
+                if (!string.IsNullOrEmpty(job.Filename))
+                {
+                    string pendingDir = Path.Combine(_env.WebRootPath, "Pending");
+                    if (Directory.Exists(pendingDir))
+                    {
+                        // Match filename.* to catch .part, .temp, .ytdl
+                        var partials = Directory.GetFiles(pendingDir, $"{job.Filename}.*");
+                        foreach (var p in partials)
+                        {
+                            try { File.Delete(p); } catch { }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning($"Error cleaning up job files for {job.Id}: {ex.Message}");
             }
         }
 
@@ -194,23 +232,14 @@ namespace Siphon.Services
                 string previewDir = Path.Combine(_env.WebRootPath, "PreviewImages");
                 if (Directory.Exists(previewDir))
                 {
-                    // Find any file starting with the ID (e.g. guid.jpg, guid.ico)
                     var files = Directory.GetFiles(previewDir, $"{jobId}.*");
                     foreach (var file in files)
                     {
-                        try
-                        {
-                            File.Delete(file);
-                            _logger.LogDebug($"Cleaned up preview file: {Path.GetFileName(file)}");
-                        }
-                        catch { }
+                        try { File.Delete(file); } catch { }
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning($"Failed to cleanup preview for {jobId}: {ex.Message}");
-            }
+            catch { }
         }
     }
 }
