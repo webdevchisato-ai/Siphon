@@ -36,6 +36,18 @@
                 <div class="col">
                     <div class="card h-100 shadow-sm border-0">
                         <div class="position-relative bg-black rounded-top overflow-hidden" style="padding-top: 56.25%;">
+
+                            @if (!file.IsProcessing)
+                            {
+                                <a href="@file.OriginalVideoUrl"
+                                   download="@file.Name"
+                                   class="position-absolute top-0 end-0 btn btn-sm btn-dark m-2 opacity-75"
+                                   title="Download Original"
+                                   style="z-index: 10;">
+                                    <i class="bi bi-download text-white"></i>
+                                </a>
+                            }
+
                             @if (file.IsProcessing)
                             {
                                 <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-dark text-white">
