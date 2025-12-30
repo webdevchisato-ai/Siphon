@@ -97,7 +97,7 @@ namespace Siphon.Pages
                 bool isProcessing = _previewGenerator.IsProcessing(file.FullName);
                 bool assetsMissing = !System.IO.File.Exists(thumbPath) || !System.IO.File.Exists(previewPath);
 
-                if (assetsMissing && !isProcessing)
+                if (assetsMissing && !isProcessing && !file.Name.Contains(".part"))
                 {
                     _previewGenerator.QueueGeneration(file.FullName);
                     isProcessing = true;

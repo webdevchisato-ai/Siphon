@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using System.Linq;
+using System.Net.Http; // Required for checking the API
 
 namespace Siphon.Services.LegacyDownloaders
 {
@@ -35,6 +36,7 @@ namespace Siphon.Services.LegacyDownloaders
             {
                 await new BrowserFetcher().DownloadAsync();
 
+                // 1. Launch Browser
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
                     Headless = true,
@@ -106,7 +108,7 @@ namespace Siphon.Services.LegacyDownloaders
                         _logger.LogInformation("[Hanime] Button found. Clicking...");
                         await buttons[0].ClickAsync();
 
-                        // Wait for links to appear
+                        // Wait specifically for links to appear in the DOM
                         try
                         {
                             await page.WaitForFunctionAsync(@"() => {
@@ -116,12 +118,12 @@ namespace Siphon.Services.LegacyDownloaders
                         }
                         catch
                         {
-                            _logger.LogWarning("[Hanime] Timed out waiting for links to render. They might be missing or already there.");
+                            _logger.LogWarning("[Hanime] Timed out waiting for links. They might be missing or already visible.");
                         }
                     }
                     else
                     {
-                        _logger.LogWarning("[Hanime] 'Get Download Links' button NOT found. Assuming links are already visible.");
+                        _logger.LogWarning("[Hanime] 'Get Download Links' button NOT found. Assuming links are visible.");
                     }
                 }
                 catch (Exception ex)
@@ -129,14 +131,12 @@ namespace Siphon.Services.LegacyDownloaders
                     _logger.LogWarning($"[Hanime] Interaction error: {ex.Message}");
                 }
 
-                // NOW scrape the links
+                // Scrape the links
                 pixeldrainLink = await page.EvaluateFunctionAsync<string>(@"() => {
-                    // Find all 'a' tags that have 'pixeldrain' in the href
                     const buttons = Array.from(document.querySelectorAll('a[href*=""pixeldrain""]'));
-                    
                     if (buttons.length === 0) return null;
 
-                    // Parse resolution from text
+                    // Parse resolution
                     const getRes = (el) => {
                         const text = el.innerText || '';
                         if (text.includes('1080')) return 1080;
@@ -146,9 +146,8 @@ namespace Siphon.Services.LegacyDownloaders
                         return 0;
                     };
 
-                    // Sort descending (highest resolution first)
+                    // Sort descending
                     buttons.sort((a, b) => getRes(b) - getRes(a));
-
                     return buttons[0].href;
                 }");
 
@@ -157,39 +156,55 @@ namespace Siphon.Services.LegacyDownloaders
 
                 if (string.IsNullOrEmpty(pixeldrainLink))
                 {
-                    _logger.LogError("[Hanime] Could not find any Pixeldrain links. The button click may have failed or no mirrors are available.");
+                    _logger.LogError("[Hanime] Could not find any Pixeldrain links.");
                     throw new Exception("No suitable download mirror found (Pixeldrain missing).");
                 }
 
                 _logger.LogInformation($"[Hanime] Found Pixeldrain Link: {pixeldrainLink}");
 
-                // --- STEP 3: Convert to Direct API Link (FIXED) ---
-                // Old: pixeldrain.com/api/file/{ID} (404 Not Found)
-                // New: pixeldrain.com/api/filesystem/{ID} (Matches source HTML)
+                // --- STEP 3: API Endpoint Fallback Strategy ---
 
-                var match = Regex.Match(pixeldrainLink, @"pixeldrain\.com/d/([a-zA-Z0-9]+)");
-                if (!match.Success)
-                {
-                    throw new Exception($"Invalid Pixeldrain URL format: {pixeldrainLink}");
-                }
+                var match = Regex.Match(pixeldrainLink, @"pixeldrain\.com/(?:d|u|api/file|api/filesystem)/([a-zA-Z0-9]+)");
+                if (!match.Success) throw new Exception($"Invalid Pixeldrain URL format: {pixeldrainLink}");
 
                 string fileId = match.Groups[1].Value;
-                // CHANGED: Use 'filesystem' endpoint instead of 'file'
-                string directUrl = $"https://pixeldrain.com/api/filesystem/{fileId}";
 
+                // Define the two possible API endpoints
+                string filesystemUrl = $"https://pixeldrain.com/api/filesystem/{fileId}";
+                string fileUrl = $"https://pixeldrain.com/api/file/{fileId}";
+                string finalDirectUrl = null;
+
+                // Setup filename
                 string safeName = SharedScraperLogic.SanitizeFileName(videoTitle);
                 string fullPath = Path.Combine(_path, $"{safeName}.mp4");
-
                 _job.FinalFilePath = fullPath;
                 _job.Filename = safeName;
-                _job.Status = "Downloading file...";
 
-                _logger.LogInformation($"[Hanime] Direct API URL: {directUrl}");
-                _logger.LogInformation($"[Hanime] Saving to: {fullPath}");
+                // --- PROBE: Determine which endpoint works ---
+                _logger.LogInformation("[Hanime] Probing API endpoints...");
+
+                if (await ProbeUrl(filesystemUrl))
+                {
+                    _logger.LogInformation($"[Hanime] Filesystem API valid: {filesystemUrl}");
+                    finalDirectUrl = filesystemUrl;
+                }
+                else if (await ProbeUrl(fileUrl))
+                {
+                    _logger.LogInformation($"[Hanime] Standard File API valid: {fileUrl}");
+                    finalDirectUrl = fileUrl;
+                }
+                else
+                {
+                    _logger.LogError($"[Hanime] Both API endpoints returned 404 for ID {fileId}");
+                    throw new Exception("File not found on Pixeldrain (404 on both endpoints).");
+                }
 
                 // --- STEP 4: Download ---
+                _job.Status = "Downloading file...";
+                _logger.LogInformation($"[Hanime] Saving to: {fullPath}");
+
                 await SharedScraperLogic.DownloadWithProgressAsync(
-                    directUrl,
+                    finalDirectUrl,
                     fullPath,
                     downloadPageUrl,
                     safeName,
@@ -212,6 +227,25 @@ namespace Siphon.Services.LegacyDownloaders
                 _logger.LogError(ex, $"[Hanime] Error: {ex.Message}");
                 if (browser != null && !browser.IsClosed) await browser.CloseAsync();
                 throw;
+            }
+        }
+
+        // Helper to check if a URL returns 200 OK (Head Request)
+        private async Task<bool> ProbeUrl(string url)
+        {
+            try
+            {
+                using (var client = new HttpClient())
+                {
+                    // Use HEAD to check without downloading
+                    var request = new HttpRequestMessage(HttpMethod.Head, url);
+                    var response = await client.SendAsync(request);
+                    return response.IsSuccessStatusCode;
+                }
+            }
+            catch
+            {
+                return false;
             }
         }
     }

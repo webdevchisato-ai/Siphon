@@ -25,6 +25,9 @@ namespace Siphon.Services
 
         public static async Task DownloadWithProgressAsync(string url, string path, string refUrl, string name, int attempt, DownloadJob job, CancellationToken token)
         {
+            // 1. Define the temporary .part path
+            string tempPath = path + ".part";
+
             // Configure HttpClient to use Tor Proxy
             var proxy = new WebProxy(PROXY_URL);
             var handler = new HttpClientHandler { Proxy = proxy, UseProxy = true };
@@ -44,7 +47,7 @@ namespace Siphon.Services
 
                     // Pass token to ReadAsStreamAsync
                     using (var source = await resp.Content.ReadAsStreamAsync(token))
-                    using (var dest = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
+                    using (var dest = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
                     {
                         var buf = new byte[65536];
                         var read = 0;
@@ -86,6 +89,13 @@ namespace Siphon.Services
                     }
                 }
             }
+
+            // 2. Rename .part to final filename
+            if (File.Exists(path))
+            {
+                try { File.Delete(path); } catch { }
+            }
+            File.Move(tempPath, path);
         }
     }
 }
