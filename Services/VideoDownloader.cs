@@ -1,9 +1,10 @@
-﻿using Siphon.Services.LegacyDownloaders;
+﻿using Microsoft.AspNetCore.SignalR;
+using PuppeteerSharp;
+using Siphon.Services.LegacyDownloaders;
 using System.Diagnostics;
+using System.Net; // Required for WebProxy
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using System.Net;
-using System.Text;
 
 namespace Siphon.Services
 {
@@ -47,8 +48,6 @@ namespace Siphon.Services
                 if (token.IsCancellationRequested) throw new OperationCanceledException();
 
                 job.Status = "yt-dlp failed. Reverting...";
-                _logger.LogWarning($"[Legacy Switch] yt-dlp failed for {job.Url}. Attempting legacy downloaders.");
-
                 await Task.Delay(1000, token);
 
                 if (job.Url.Contains("eporner.com"))
@@ -56,7 +55,7 @@ namespace Siphon.Services
                 else if (job.Url.Contains("pornhub.com"))
                     await new PornHubDownloader(_downloadPath, "https://pornhubfans.com", job.Url, job).Download(token);
                 else if (job.Url.Contains("hanime.tv"))
-                    await new HanimeDownloader(_downloadPath, job.Url, job).Download(token);
+                    await new HanimeDownloader(_downloadPath, job.Url, job, _logger).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 
@@ -77,9 +76,6 @@ namespace Siphon.Services
             }
         }
 
-        // ... (Keep existing FetchMetadata, TryYtDlp, TryDownloadRule34ThumbnailAsync, LoadLegacyConfig exactly as they were) ...
-        // [Copy the rest of your VideoDownloader class here]
-
         private async Task FetchMetadata(DownloadJob job, CancellationToken token)
         {
             job.Status = "Fetching info...";
@@ -96,22 +92,42 @@ namespace Siphon.Services
                 };
 
                 using var process = new Process { StartInfo = startInfo };
-                StringBuilder jsonOutput = new StringBuilder();
-                process.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) jsonOutput.Append(e.Data); };
+                string jsonOutput = "";
+                process.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) jsonOutput += e.Data; };
 
                 process.Start();
                 process.BeginOutputReadLine();
                 await process.WaitForExitAsync(token).WaitAsync(TimeSpan.FromSeconds(60), token);
 
-                if (process.ExitCode == 0 && jsonOutput.Length > 0)
+                if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(jsonOutput))
                 {
-                    var node = JsonNode.Parse(jsonOutput.ToString());
+                    var node = JsonNode.Parse(jsonOutput);
                     string title = node?["title"]?.ToString();
                     string thumb = node?["thumbnail"]?.ToString();
 
                     if (job.Url.Contains("rule34video.com"))
                     {
+                        // Use the job ID to name the file locally
                         thumb = await TryDownloadRule34ThumbnailAsync(job.Url, job.Id);
+                    }
+
+                    if (job.Url.Contains("hanime.tv"))
+                    {
+                        thumb = await TryGetHanimeThumbnail(job.Url);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title);
+                    if (!string.IsNullOrWhiteSpace(thumb)) job.ThumbnailUrl = thumb;
+                }
+                else
+                {
+                    _logger.LogWarning($"yt-dlp metadata fetch failed with exit code, still attempting to get hanime info {process.ExitCode}");
+                    string thumb = null;
+                    string title = null;
+                    if (job.Url.Contains("hanime.tv"))
+                    {
+                        title = ExtractHanimeTitleFromUrl(job.Url);
+                        thumb = await TryGetHanimeThumbnail(job.Url);
                     }
 
                     if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title);
@@ -155,6 +171,7 @@ namespace Siphon.Services
                                 job.Progress = p;
                                 job.Status = $"Downloading";
                             }
+
                             var matchSpd = Regex.Match(e.Data, @"at\s+(\d+\.?\d*\w+/s)");
                             if (matchSpd.Success)
                             {
@@ -165,6 +182,7 @@ namespace Siphon.Services
 
                     process.Start();
                     process.BeginOutputReadLine();
+
                     await process.WaitForExitAsync(token);
 
                     if (process.ExitCode == 0)
@@ -184,27 +202,150 @@ namespace Siphon.Services
             return false;
         }
 
+        public async Task<string> TryGetHanimeThumbnail(string videoUrl)
+        {
+            _logger.LogInformation("Hanime Url Identified, Attempting to find preview image");
+
+            IBrowser browser = null;
+            try
+            {
+                // Ensure browser is available
+                _logger.LogInformation("Launching headless browser for thumbnail extraction...");
+                await new BrowserFetcher().DownloadAsync();
+
+                // Launch a temporary headless browser
+                browser = await Puppeteer.LaunchAsync(new LaunchOptions
+                {
+                    Headless = true,
+                    Args = new[] {
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-infobars",
+                "--window-position=0,0",
+                "--ignore-certificate-errors",
+                "--ignore-certificate-errors-spki-list",
+                "--user-agent=\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\""
+                }
+                });
+
+                var page = await browser.NewPageAsync();
+
+                // Optimize: Block images/fonts since we only need the HTML/CSS text
+                await page.SetRequestInterceptionAsync(true);
+                page.Request += async (sender, e) =>
+                {
+                    if (e.Request.ResourceType == ResourceType.Image ||
+                        e.Request.ResourceType == ResourceType.Font ||
+                        e.Request.ResourceType == ResourceType.StyleSheet)
+                    {
+                        await e.Request.AbortAsync();
+                    }
+                    else
+                    {
+                        await e.Request.ContinueAsync();
+                    }
+                };
+
+                // Navigate
+                await page.GoToAsync(videoUrl, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } });
+                _logger.LogInformation("Page loaded, extracting thumbnail URL...");
+                // Extract the thumbnail URL from the computed style of the poster div
+                var thumbnailUrl = await page.EvaluateFunctionAsync<string>(@"() => {
+                    // Try the main player poster
+                    let el = document.querySelector('.poster');
+                    // Fallback to the cover image if poster is missing
+                    if (!el) el = document.querySelector('.content__data__cover');
+                    if (!el) return null;
+                    // Get the background-image property https://example.com/img.jpg
+                    const bg = el.style.backgroundImage || window.getComputedStyle(el).backgroundImage;
+                    if (bg && bg.includes('url')) {
+                        // Strip the url() wrapper and quotes
+                        return bg.replace(/^url\(['""]?/, '').replace(/['""]?\)$/, '');
+                    }
+                    return null;
+                }");
+                _logger.LogInformation($"Extracted thumbnail URL: {thumbnailUrl}");
+                await browser.CloseAsync();
+                return thumbnailUrl;
+            }
+            catch
+            {
+                if (browser != null) await browser.CloseAsync();
+                return null;
+            }
+        }
+
+        public string ExtractHanimeTitleFromUrl(string url)
+        {
+            try
+            {
+                // 1. Parse the URL
+                if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+                {
+                    return "Unknown_Hanime_Video";
+                }
+
+                // 2. Get the last segment (e.g., "tamashii-insert-2")
+                // uri.Segments returns parts like ["/", "videos/", "hentai/", "tamashii-insert-2"]
+                string slug = uri.Segments.Last().Trim('/');
+
+                // 3. Format it: Replace dashes with spaces and Title Case it
+                // "tamashii-insert-2" -> "Tamashii Insert 2"
+                string title = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(slug.Replace("-", " "));
+
+                return title;
+            }
+            catch
+            {
+                return "Unknown_Hanime_Video";
+            }
+        }
+
+        // --- UPDATED RULE34 LOGIC ---
         private async Task<string> TryDownloadRule34ThumbnailAsync(string videoUrl, string jobId)
         {
             _logger.LogInformation("Rule34Video Url Identified, Attempting to download preview image");
+
+            // 1. Setup Local Directory
             string previewDir = Path.Combine(_env.WebRootPath, "PreviewImages");
             if (!Directory.Exists(previewDir)) Directory.CreateDirectory(previewDir);
+
+            // 2. Prepare Default Fallback
             string defaultRemote = "https://rule34video.com/favicon.ico";
+
+            // 3. Extract ID and Calculate Group
             long id = 0;
             long groupId = 0;
             string baseUrl = null;
+
             var match = Regex.Match(videoUrl, @"/video/(\d+)");
             if (match.Success && long.TryParse(match.Groups[1].Value, out id))
             {
                 groupId = (id / 1000) * 1000;
                 baseUrl = $"https://rule34video.com/contents/videos_screenshots/{groupId}/{id}";
             }
-            string[] suffixes = { "preview_720p.mp4.jpg", "preview_1080p.mp4.jpg", "preview_480p.mp4.jpg", "preview_360p.mp4.jpg", "preview.mp4.jpg" };
+            else
+            {
+                _logger.LogInformation($"Failed to extract ID. Using default icon.");
+            }
+
+            string[] suffixes =
+            {
+                "preview_720p.mp4.jpg",
+                "preview_1080p.mp4.jpg",
+                "preview_480p.mp4.jpg",
+                "preview_360p.mp4.jpg",
+                "preview.mp4.jpg"
+            };
+
+            // 4. Configure Tor Proxy Client
             try
             {
                 var proxy = new WebProxy("socks5://127.0.0.1:9050");
                 var handler = new HttpClientHandler { Proxy = proxy };
                 using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+
+                // A. Try specific previews if we have an ID
                 if (baseUrl != null)
                 {
                     foreach (var suffix in suffixes)
@@ -214,27 +355,36 @@ namespace Siphon.Services
                         {
                             var request = new HttpRequestMessage(HttpMethod.Get, candidateUrl);
                             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+
                             if (response.IsSuccessStatusCode)
                             {
+                                // Found valid image! Download it.
                                 string extension = ".jpg";
                                 string localFileName = $"{jobId}{extension}";
                                 string savePath = Path.Combine(previewDir, localFileName);
+
                                 using (var stream = await response.Content.ReadAsStreamAsync())
                                 using (var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write))
                                 {
                                     await stream.CopyToAsync(fileStream);
                                 }
+
+                                _logger.LogInformation($"Downloaded preview to {localFileName}");
                                 return $"/PreviewImages/{localFileName}";
                             }
                         }
-                        catch { }
+                        catch { /* Try next suffix */ }
                     }
                 }
+
+                // B. Fallback: Download the favicon
+                _logger.LogInformation("Downloading default favicon...");
                 using var icoResponse = await client.GetAsync(defaultRemote);
                 if (icoResponse.IsSuccessStatusCode)
                 {
                     string localFileName = $"{jobId}.ico";
                     string savePath = Path.Combine(previewDir, localFileName);
+
                     using (var stream = await icoResponse.Content.ReadAsStreamAsync())
                     using (var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write))
                     {
@@ -247,6 +397,8 @@ namespace Siphon.Services
             {
                 _logger.LogError($"Error downloading Rule34 thumbnail via Tor: {ex.Message}");
             }
+
+            // Absolute failsafe if Tor fails entirely
             return "/favicon.ico";
         }
 
