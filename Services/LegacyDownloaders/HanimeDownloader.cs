@@ -34,6 +34,14 @@ namespace Siphon.Services.LegacyDownloaders
 
             try
             {
+                try
+                {
+                    await new BrowserFetcher().DownloadAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error downloading browser binaries: {ex.Message}");
+                }
                 // 1. Launch Browser
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {

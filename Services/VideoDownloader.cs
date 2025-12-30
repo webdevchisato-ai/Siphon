@@ -209,6 +209,16 @@ namespace Siphon.Services
             IBrowser browser = null;
             try
             {
+                try
+                {
+                    await new BrowserFetcher().DownloadAsync();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error downloading browser binaries: {ex.Message}");
+                    return null;
+                }
+
                 // Ensure browser is available
                 _logger.LogInformation("Launching headless browser for thumbnail extraction...");
 
