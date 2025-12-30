@@ -211,7 +211,6 @@ namespace Siphon.Services
             {
                 // Ensure browser is available
                 _logger.LogInformation("Launching headless browser for thumbnail extraction...");
-                await new BrowserFetcher().DownloadAsync();
 
                 // Launch a temporary headless browser
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions

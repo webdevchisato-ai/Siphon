@@ -34,8 +34,6 @@ namespace Siphon.Services.LegacyDownloaders
 
             try
             {
-                await new BrowserFetcher().DownloadAsync();
-
                 // 1. Launch Browser
                 browser = await Puppeteer.LaunchAsync(new LaunchOptions
                 {
