@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System.Text.Json;
 
 namespace Siphon.Pages
 {
@@ -8,6 +9,7 @@ namespace Siphon.Pages
         public string Size { get; set; }
         public string Url { get; set; }
         public DateTime Created { get; set; }
+        public string ApprovedDirReadable { get; set; }
     }
 
     public class ApprovedModel : PageModel
@@ -20,6 +22,7 @@ namespace Siphon.Pages
         }
 
         public List<ApprovedFile> Files { get; set; } = new();
+        private List<string> ApprovalDirectories { get; set; } = new();
 
         public void OnGet()
         {
@@ -39,8 +42,43 @@ namespace Siphon.Pages
                     Name = file.Name,
                     Size = FormatSize(file.Length),
                     Url = $"/Approved/{file.Name}",
-                    Created = file.CreationTime
+                    Created = file.CreationTime,
+                    ApprovedDirReadable = "Default"
                 });
+            }
+
+            var configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "extra_dirs.json");
+            if (System.IO.File.Exists(configPath))
+            {
+                try
+                {
+                    var json = System.IO.File.ReadAllText(configPath);
+                    var extras = JsonSerializer.Deserialize<List<string>>(json);
+                    if (extras != null)
+                    {
+                        // Prefix them so we know they go into "Extra_Approved"
+                        ApprovalDirectories.AddRange(extras.Select(d => $"Extra_Approved/{d}"));
+                    }
+                }
+                catch { }
+            }
+
+            foreach (var dir in ApprovalDirectories)
+            {
+                var extraDirInfo = new DirectoryInfo(Path.Combine(_env.WebRootPath, dir));
+                var extraFiles = extraDirInfo.GetFiles().OrderByDescending(f => f.CreationTime);
+
+                foreach (var file in extraFiles)
+                {
+                    Files.Add(new ApprovedFile
+                    {
+                        Name = file.Name,
+                        Size = FormatSize(file.Length),
+                        Url = $"/{dir}/{file.Name}",
+                        Created = file.CreationTime,
+                        ApprovedDirReadable = $"{dir.Replace("Extra_Approved", "").Replace("/", "")}"
+                    });
+                }
             }
         }
 
