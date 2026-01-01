@@ -43,7 +43,7 @@ namespace Siphon.Pages
                     Size = FormatSize(file.Length),
                     Url = $"/Approved/{file.Name}",
                     Created = file.CreationTime,
-                    ApprovedDirReadable = "Default"
+                    ApprovedDirReadable = "Approved"
                 });
             }
 

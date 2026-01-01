@@ -4,27 +4,256 @@
     ViewData["Title"] = "Home";
 }
 
-<div class="text-center mt-5 pt-5">
-    <div class="mb-4">
-        <i class="bi bi-cloud-download text-primary" style="font-size: 5rem;"></i>
+<style>
+    /* Full Page Gradient Background */
+    body {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+        background-attachment: fixed;
+    }
+
+    /* Hover Card Effects */
+    .hover-card {
+        transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+        border: none;
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+    }
+
+        .hover-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 1rem 3rem rgba(0,0,0,0.175) !important;
+            background: #fff;
+        }
+
+    /* Hero Icon Gradient */
+    .hero-icon {
+        background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        display: inline-block;
+    }
+
+    /* --- SIDEBAR POPOUT --- */
+
+    /* Invisible Trigger Zone on Right Edge */
+    .sidebar-trigger {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 40px;
+        height: 100vh;
+        z-index: 1040;
+    }
+
+    /* The Hidden Panel */
+    .status-panel {
+        position: fixed;
+        top: 20%;
+        right: -300px; /* CHANGED: Matches width exactly so it sits right on the edge */
+        width: 300px;
+        background: white;
+        border-radius: 12px 0 0 12px;
+        box-shadow: -5px 5px 20px rgba(0,0,0,0.15); /* Slightly darker shadow for contrast */
+        padding: 1.5rem;
+        z-index: 1050;
+        transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border-left: 4px solid var(--bs-primary);
+    }
+
+        /* Slide in when hovering Trigger OR Panel */
+        .sidebar-trigger:hover ~ .status-panel,
+        .status-panel:hover {
+            right: 0;
+        }
+
+        /* The Visible Handle (Tab) */
+        .status-panel::before {
+            content: "\F282"; /* Bootstrap Icon Chevron Left */
+            font-family: 'bootstrap-icons';
+            position: absolute;
+            /* CHANGED: Make it stick out 40px into the screen */
+            left: -40px;
+            width: 40px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--bs-primary);
+            color: white;
+            /* CHANGED: Bigger padding for a larger "grab" area */
+            padding: 15px 0;
+            text-align: center;
+            border-radius: 8px 0 0 8px;
+            font-size: 1.4rem; /* Slightly larger icon */
+            cursor: pointer;
+            box-shadow: -4px 2px 10px rgba(0,0,0,0.2);
+        }
+</style>
+
+<div class="sidebar-trigger"></div>
+
+<div class="status-panel">
+    <h5 class="fw-bold mb-3"><i class="bi bi-activity text-primary me-2"></i>System Status</h5>
+
+    <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">Tor IP:</span>
+        <span id="tor-ip" class="badge bg-secondary">Loading...</span>
     </div>
 
-    <h1 class="display-4 fw-bold">Welcome to Siphon</h1>
-    <p class="lead text-muted mb-5">
-        Secure, Dockerized Video Downloader routed via Tor.
-    </p>
+    <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">Downloading:</span>
+        <span id="download-count" class="fw-bold">...</span>
+    </div>
 
-    <div class="d-flex justify-content-center gap-3">
-        <a asp-page="/Downloader" class="btn btn-primary btn-lg px-5 py-3 shadow-sm">
-            <i class="bi bi-download"></i> Open Downloader
-        </a>
+    <div class="d-flex justify-content-between mb-2">
+        <span class="text-muted">Pending:</span>
+        <span id="queue-count" class="fw-bold">...</span>
+    </div>
 
-        <a asp-page="/Pending" class="btn btn-outline-dark btn-lg px-5 py-3 shadow-sm">
-            <i class="bi bi-hourglass-split"></i> View Pending
-        </a>
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-end mb-1">
+            <span class="text-muted">Storage</span>
+            <span id="storage-text" class="fw-bold small">Calculating...</span>
+        </div>
+        <div class="progress" style="height: 6px;">
+            <div id="storage-bar"
+                 class="progress-bar bg-primary"
+                 role="progressbar"
+                 style="width: 0%; transition: width 1s ease;">
+            </div>
+        </div>
+    </div>
 
-        <a asp-page="/Settings" class="btn btn-outline-dark btn-lg px-5 py-3 shadow-sm">
-            <i class="bi bi-gear-fill"></i> Open Settings
-        </a>
+    <hr class="text-muted" />
+
+    <div class="alert alert-light border shadow-sm p-2 mb-0">
+        <small class="text-muted d-block mb-1"><i class="bi bi-geo-alt-fill me-1"></i> Current Location</small>
+        <small id="tor-country" class="fw-bold text-dark">Locating...</small>
     </div>
 </div>
+
+<div class="container py-5">
+    <div class="text-center mb-5 fade-in">
+        <div class="mb-3">
+            <i class="bi bi-cloud-download hero-icon" style="font-size: 5rem;"></i>
+        </div>
+        <h1 class="display-4 fw-bold mb-2">Welcome to Siphon</h1>
+        <p class="lead text-secondary mx-auto" style="max-width: 600px;">
+            Secure, Dockerized Video Downloader routed via Tor.
+        </p>
+    </div>
+
+    <div class="row g-4 justify-content-center" style="max-width: 900px; margin: 0 auto;">
+
+        <div class="col-md-6">
+            <a asp-page="/Downloader" class="text-decoration-none">
+                <div class="card h-100 p-4 shadow-sm hover-card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-download text-primary mb-3" style="font-size: 2.5rem;"></i>
+                        <h4 class="card-title text-dark fw-bold">Open Downloader</h4>
+                        <p class="card-text text-muted">Start new downloads securely via the Tor network.</p>
+                        <span class="btn btn-primary w-100 mt-2 rounded-pill">Launch</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6">
+            <a asp-page="/Pending" class="text-decoration-none">
+                <div class="card h-100 p-4 shadow-sm hover-card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-hourglass-split text-warning mb-3" style="font-size: 2.5rem;"></i>
+                        <h4 class="card-title text-dark fw-bold">View Pending</h4>
+                        <p class="card-text text-muted">Manage active downloads and queue status.</p>
+                        <span class="btn btn-outline-dark w-100 mt-2 rounded-pill">Manage Queue</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6">
+            <a asp-page="/Approved" class="text-decoration-none">
+                <div class="card h-100 p-4 shadow-sm hover-card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-file-earmark-check-fill text-success mb-3" style="font-size: 2.5rem;"></i>
+                        <h4 class="card-title text-dark fw-bold">Approved Files</h4>
+                        <p class="card-text text-muted">Browse and access your completed downloads.</p>
+                        <span class="btn btn-outline-dark w-100 mt-2 rounded-pill">View Library</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6">
+            <a asp-page="/Settings" class="text-decoration-none">
+                <div class="card h-100 p-4 shadow-sm hover-card text-center">
+                    <div class="card-body">
+                        <i class="bi bi-gear-fill text-secondary mb-3" style="font-size: 2.5rem;"></i>
+                        <h4 class="card-title text-dark fw-bold">Settings</h4>
+                        <p class="card-text text-muted">Configure scrapers, paths, and system options.</p>
+                        <span class="btn btn-outline-dark w-100 mt-2 rounded-pill">Configure</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        async function updateSystemStats() {
+            try {
+                // Fetch JSON from the C# backend
+                const response = await fetch('/?handler=SystemStats');
+                if (!response.ok) return;
+
+                const data = await response.json();
+
+                // 1. Tor IP Status
+                const ipBadge = document.getElementById('tor-ip');
+                ipBadge.textContent = data.ip;
+
+                if (data.isRotating) {
+                    ipBadge.className = 'badge bg-warning text-dark';
+                    ipBadge.textContent = 'Rotating...';
+                } else if (data.ip === 'Initializing...' || !data.ip) {
+                    ipBadge.className = 'badge bg-secondary';
+                } else {
+                    ipBadge.className = 'badge bg-success';
+                }
+
+                // 2. Country
+                document.getElementById('tor-country').textContent = data.country || "Unknown Location";
+
+                // 3. Pending Items
+                document.getElementById('queue-count').textContent = data.queueCount + " Items";
+
+                // 3. Downloading Items
+                document.getElementById('download-count').textContent = data.downloadingCount + " Items";
+
+                // 4. Storage Info
+                document.getElementById('storage-text').textContent = data.storage; // e.g. "500 GB free / 2 TB"
+
+                // Storage Bar Animation
+                const bar = document.getElementById('storage-bar');
+                bar.style.width = data.storagePercent + "%";
+
+                // Turn bar red if over 90% full
+                if (data.storagePercent > 90) {
+                    bar.className = 'progress-bar bg-danger';
+                } else {
+                    bar.className = 'progress-bar bg-primary';
+                }
+
+            } catch (err) {
+                console.error("Failed to fetch system stats:", err);
+            }
+        }
+
+        // Run immediately
+        updateSystemStats();
+
+        // Refresh every 10 seconds
+        setInterval(updateSystemStats, 10000);
+    </script>
+}
