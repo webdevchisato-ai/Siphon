@@ -1,11 +1,14 @@
-﻿namespace Siphon.Services
+﻿using System.Text.Json;
+
+namespace Siphon.Services
 {
     public class RetentionService : IHostedService, IDisposable
     {
         private readonly ILogger<RetentionService> _logger;
         private readonly UserService _userService;
         private readonly IWebHostEnvironment _env;
-        private Timer _timer;
+        private Timer pendingTimmer;
+        private Timer approvedTimmer;
 
         public RetentionService(ILogger<RetentionService> logger, UserService userService, IWebHostEnvironment env)
         {
@@ -23,7 +26,14 @@
             _logger.LogInformation($"Retention Service started. Schedule: Every {intervalMinutes} minutes.");
 
             // Start timer: Run immediately once (TimeSpan.Zero), then repeat every 'intervalMinutes'
-            _timer = new Timer(CleanupFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(intervalMinutes));
+            pendingTimmer = new Timer(CleanupPendingFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(intervalMinutes));
+
+            int approvedRetention = _userService.GetApprovedRetentionMinutes();
+            if (intervalMinutes <= 0) intervalMinutes = 60;
+
+            _logger.LogInformation($"Approved Retention Service started. Schedule: Every {approvedRetention} minutes.");
+
+            approvedTimmer = new Timer(CleanupApprovedFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(approvedRetention));
 
             return Task.CompletedTask;
         }
@@ -31,19 +41,80 @@
         // --- NEW: Update the timer without forcing immediate execution ---
         public void UpdateTimerInterval()
         {
-            int newMinutes = _userService.GetPreservationMinutes();
-            if (newMinutes <= 0) newMinutes = 60;
+            int pendingMins = _userService.GetPreservationMinutes();
+            int approvedMins = _userService.GetApprovedRetentionMinutes();
+            if (pendingMins <= 0) pendingMins = 60;
+            if (approvedMins <= 0) approvedMins = 60;
 
-            _logger.LogInformation($"Retention Interval updated. Next check in {newMinutes} minutes.");
+            _logger.LogInformation($"Pending Retention Interval updated. Next check in {pendingMins} minutes.");
+            _logger.LogInformation($"Approved Retention Interval updated. Next check in {approvedMins} minutes.");
 
             // Change(dueTime, period)
             // dueTime = newMinutes (Wait this long before the next run)
             // period = newMinutes (Repeat interval)
-            _timer?.Change(TimeSpan.FromMinutes(newMinutes), TimeSpan.FromMinutes(newMinutes));
+            pendingTimmer?.Change(TimeSpan.FromMinutes(pendingMins), TimeSpan.FromMinutes(pendingMins));
+            approvedTimmer?.Change(TimeSpan.FromMinutes(approvedMins), TimeSpan.FromMinutes(approvedMins));
         }
 
-        private void CleanupFiles(object state)
+        private void CleanupApprovedFiles(object state)
         {
+            _logger.LogInformation("Approved: Running retention cleanup.");
+            try
+            {
+                int maxMinutes = _userService.GetApprovedRetentionMinutes();
+                if (maxMinutes <= 0) return;
+
+                var cutoffTime = DateTime.UtcNow.AddMinutes(-maxMinutes);
+
+                var configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "extra_dirs.json");
+                List<string> ApprovalDirectories = new List<string>();
+                if (System.IO.File.Exists(configPath))
+                {
+                    try
+                    {
+                        var json = System.IO.File.ReadAllText(configPath);
+                        var extras = JsonSerializer.Deserialize<List<string>>(json);
+                        if (extras != null)
+                        {
+                            // Prefix them so we know they go into "Extra_Approved"
+                            ApprovalDirectories.AddRange(extras.Select(d => $"Extra_Approved/{d}"));
+                        }
+                        ApprovalDirectories.Add("Approved");
+                    }
+                    catch { }
+                }
+
+                foreach (var dir in ApprovalDirectories)
+                {
+                    var approvedDir = Path.Combine(_env.WebRootPath, dir);
+                    if (!Directory.Exists(approvedDir)) continue;
+                    var files = new DirectoryInfo(approvedDir).GetFiles();
+                    foreach (var file in files)
+                    {
+                        if (file.CreationTimeUtc < cutoffTime)
+                        {
+                            _logger.LogInformation($"Retention Policy: Deleting old approved file {file.Name} from {dir} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
+                            try
+                            {
+                                file.Delete();
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError($"Failed to delete approved file {file.Name} from {dir}: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Approved: Retention Service Error: {ex.Message}");
+            }
+        }
+
+        private void CleanupPendingFiles(object state)
+        {
+            _logger.LogInformation("Pending: Running retention cleanup.");
             try
             {
                 int maxMinutes = _userService.GetPreservationMinutes();
@@ -62,7 +133,7 @@
                 {
                     if (file.CreationTimeUtc < cutoffTime)
                     {
-                        _logger.LogInformation($"Retention Policy: Deleting old file {file.Name} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
+                        _logger.LogInformation($"Retention Policy: Deleting old pending file {file.Name} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
 
                         try
                         {
@@ -79,23 +150,28 @@
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogError($"Failed to delete {file.Name}: {ex.Message}");
+                            _logger.LogError($"Failed pending to delete {file.Name}: {ex.Message}");
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Retention Service Error: {ex.Message}");
+                _logger.LogError($"Pending: Retention Service Error: {ex.Message}");
             }
         }
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            _timer?.Change(Timeout.Infinite, 0);
+            pendingTimmer?.Change(Timeout.Infinite, 0);
+            approvedTimmer?.Change(Timeout.Infinite, 0);
             return Task.CompletedTask;
         }
 
-        public void Dispose() => _timer?.Dispose();
+        public void Dispose()
+        {
+            pendingTimmer?.Dispose();
+            approvedTimmer?.Dispose();
+        }
     }
 }

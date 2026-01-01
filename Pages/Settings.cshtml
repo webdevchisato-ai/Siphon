@@ -68,6 +68,24 @@
                                 <small class="text-muted"><i class="bi bi-info-circle"></i> Files left in "Pending" longer than this duration will be automatically removed.</small>
                             </div>
                         </div>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Auto-Delete Pending Files After</label>
+                                <input type="number" class="form-control" asp-for="ApprovedRetentionValue" min="1" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Unit</label>
+                                <select class="form-select" asp-for="ApprovedRetentionUnit">
+                                    <option value="Minutes">Minutes</option>
+                                    <option value="Hours">Hours</option>
+                                    <option value="Days">Days</option>
+                                    <option value="Weeks">Weeks</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted"><i class="bi bi-info-circle"></i> Files left in any "Approved" Directory longer than this duration will be automatically removed.</small>
+                            </div>
+                        </div>
 
                         <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Storage Folders</h6>
                         <div class="mb-4">

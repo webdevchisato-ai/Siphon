@@ -10,6 +10,7 @@ namespace Siphon.Services
         public string PasswordHash { get; set; }
         public string Salt { get; set; }
         public int PendingPreservationMinutes { get; set; } = 2880;
+        public int ApporvedRetentionMins { get; set; } = 60;
     }
 
     public class UserService
@@ -34,6 +35,17 @@ namespace Siphon.Services
             catch { return 2880; }
         }
 
+        public int GetApprovedRetentionMinutes()
+        {
+            try
+            {
+                if (!File.Exists(_configPath)) return 60;
+                var config = JsonSerializer.Deserialize<UserConfig>(File.ReadAllText(_configPath));
+                return config?.ApporvedRetentionMins ?? 60;
+            }
+            catch { return 60; }
+        }
+
         public UserConfig GetUserConfig()
         {
             if (!File.Exists(_configPath)) return null;
@@ -41,25 +53,27 @@ namespace Siphon.Services
             catch { return null; }
         }
 
-        public void CreateUser(string username, string password, int preservationMinutes)
+        public void CreateUser(string username, string password, int preservationMinutes, int approvedPresservationMinutes)
         {
             // Initial creation
             var config = new UserConfig
             {
                 Username = username,
-                PendingPreservationMinutes = preservationMinutes
+                PendingPreservationMinutes = preservationMinutes,
+                ApporvedRetentionMins = approvedPresservationMinutes
             };
             SetPassword(config, password);
             SaveConfig(config);
         }
 
-        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes)
+        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins)
         {
             // Load existing to preserve Salt/Hash if password isn't changing
             var config = GetUserConfig() ?? new UserConfig();
 
             config.Username = username;
             config.PendingPreservationMinutes = preservationMinutes;
+            config.ApporvedRetentionMins = ApporvedRetentionMins;
 
             if (!string.IsNullOrWhiteSpace(newPassword))
             {

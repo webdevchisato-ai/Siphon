@@ -10,6 +10,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="wwwroot\Extra_Approved\New\**" />
+    <Compile Remove="wwwroot\Extra_Approved\TESTING\**" />
+    <Content Remove="wwwroot\Extra_Approved\New\**" />
+    <Content Remove="wwwroot\Extra_Approved\TESTING\**" />
+    <EmbeddedResource Remove="wwwroot\Extra_Approved\New\**" />
+    <EmbeddedResource Remove="wwwroot\Extra_Approved\TESTING\**" />
+    <None Remove="wwwroot\Extra_Approved\New\**" />
+    <None Remove="wwwroot\Extra_Approved\TESTING\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
     <PackageReference Include="PuppeteerSharp" Version="20.2.5" />
@@ -19,8 +30,6 @@
     <Folder Include="Config\" />
     <Folder Include="wwwroot\Approved\" />
     <Folder Include="wwwroot\Extra_Approved\" />
-    <Folder Include="wwwroot\Extra_Approved\New\" />
-    <Folder Include="wwwroot\Extra_Approved\TESTING\" />
     <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
   </ItemGroup>

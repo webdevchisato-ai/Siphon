@@ -32,6 +32,8 @@ namespace Siphon.Pages
         [BindProperty] public int RetentionValue { get; set; }
         [BindProperty] public string RetentionUnit { get; set; }
         [BindProperty] public List<string> ExtraDirectories { get; set; } = new();
+        [BindProperty] public int ApprovedRetentionValue { get; set; }
+        [BindProperty] public string ApprovedRetentionUnit { get; set; }
 
         public void OnGet()
         {
@@ -46,6 +48,13 @@ namespace Siphon.Pages
                 else if (userConfig.PendingPreservationMinutes % 1440 == 0) { RetentionValue = userConfig.PendingPreservationMinutes / 1440; RetentionUnit = "Days"; }
                 else if (userConfig.PendingPreservationMinutes % 60 == 0) { RetentionValue = userConfig.PendingPreservationMinutes / 60; RetentionUnit = "Hours"; }
                 else { RetentionValue = userConfig.PendingPreservationMinutes; RetentionUnit = "Minutes"; }
+
+                if (userConfig.ApporvedRetentionMins % 525600 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 525600; ApprovedRetentionUnit = "Years"; }
+                else if (userConfig.ApporvedRetentionMins % 43200 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 43200; ApprovedRetentionUnit = "Months"; }
+                else if (userConfig.ApporvedRetentionMins % 10080 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 10080; ApprovedRetentionUnit = "Weeks"; }
+                else if (userConfig.ApporvedRetentionMins % 1440 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 1440; ApprovedRetentionUnit = "Days"; }
+                else if (userConfig.ApporvedRetentionMins % 60 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 60; ApprovedRetentionUnit = "Hours"; }
+                else { ApprovedRetentionValue = userConfig.ApporvedRetentionMins; ApprovedRetentionUnit = "Minutes"; }
             }
 
             // 2. Load Existing Directories
@@ -73,8 +82,18 @@ namespace Siphon.Pages
                 case "Years": minutes *= 525600; break;
             }
 
+            int approvedMinutes = ApprovedRetentionValue;
+            switch (ApprovedRetentionUnit)
+            {
+                case "Hours": approvedMinutes *= 60; break;
+                case "Days": approvedMinutes *= 1440; break;
+                case "Weeks": approvedMinutes *= 10080; break;
+                case "Months": approvedMinutes *= 43200; break;
+                case "Years": approvedMinutes *= 525600; break;
+            }
+
             // 2. Update User Config
-            _userService.UpdateConfiguration(Username, Password, minutes);
+            _userService.UpdateConfiguration(Username, Password, minutes, approvedMinutes);
 
             // 3. Handle Directory Logic (Create New & Delete Removed)
 

@@ -22,6 +22,8 @@ namespace Siphon.Pages
         [BindProperty] public int RetentionValue { get; set; } = 24;
         [BindProperty] public string RetentionUnit { get; set; } = "Hours";
         [BindProperty] public List<string> ExtraDirectories { get; set; } = new();
+        [BindProperty] public int ApprovedRetentionValue { get; set; } = 1;
+        [BindProperty] public string ApprovedRetentionUnit { get; set; } = "Hours";
 
         public IActionResult OnGet()
         {
@@ -44,8 +46,18 @@ namespace Siphon.Pages
                 case "Years": minutes *= 525600; break;
             }
 
+            int approvedMinutes = ApprovedRetentionValue;
+            switch (ApprovedRetentionUnit)
+            {
+                case "Hours": approvedMinutes *= 60; break;
+                case "Days": approvedMinutes *= 1440; break;
+                case "Weeks": approvedMinutes *= 10080; break;
+                case "Months": approvedMinutes *= 43200; break;
+                case "Years": approvedMinutes *= 525600; break;
+            }
+
             // 2. Create User
-            _userService.CreateUser(Username, Password, minutes);
+            _userService.CreateUser(Username, Password, minutes, approvedMinutes);
 
             // 3. Sanitize and Save Directories
             var cleanDirs = ExtraDirectories
