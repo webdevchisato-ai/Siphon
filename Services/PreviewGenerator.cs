@@ -131,7 +131,7 @@ namespace Siphon.Services
                 int desiredPoints = 50;
 
                 //sensitivity multiplier for visual boost
-                double sensitivity = 2.0;
+                double sensitivity = 2.7;
 
                 // Calculate sample rate to get roughly the right amount of data in one pass
                 // We'll dump raw PCM data. 

@@ -152,7 +152,7 @@ namespace Siphon.Services
                     var startInfo = new ProcessStartInfo
                     {
                         FileName = "yt-dlp",
-                        Arguments = $"--proxy socks5://127.0.0.1:9050 -o \"{_downloadPath}/%(title)s.%(ext)s\" \"{job.Url}\"",
+                        Arguments = $"--proxy socks5://127.0.0.1:9050 -N 4 -f \"bv*+ba/b\" --merge-output-format mp4 -o \"{_downloadPath}/%(title)s.%(ext)s\" \"{job.Url}\"",
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,
                         UseShellExecute = false,
