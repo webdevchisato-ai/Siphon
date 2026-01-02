@@ -44,7 +44,27 @@ namespace Siphon.Pages
         // Updated handler accepts targetDir
         public IActionResult OnPostApprove(string fileName, string targetDir)
         {
-            MoveFile(fileName, targetDir);
+            // 1. Capture the variables we need so they are safe to use in the background thread
+            string currentFileName = fileName;
+            string currentTarget = targetDir;
+
+            // 2. Run the file operations in a background thread
+            Task.Run(() =>
+            {
+                try
+                {
+                    // We call MoveFile here. Since _env is a singleton service, 
+                    // it is safe to access even after the request ends.
+                    MoveFile(currentFileName, currentTarget);
+                }
+                catch (Exception ex)
+                {
+                    // OPTIONAL: Log error here since there is no UI to show it to
+                    // _logger.LogError(ex, "Failed to move file in background");
+                }
+            });
+
+            // 3. Return immediately. The user sees the page refresh instantly.
             return RedirectToPage();
         }
 
@@ -179,7 +199,7 @@ namespace Siphon.Pages
         private void DeleteFileSet(string fileName)
         {
             var path = Path.Combine(_env.WebRootPath, "Pending", fileName);
-            if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+            try { System.IO.File.Delete(path); } catch { }
             CleanupExtras(path);
         }
 
@@ -188,9 +208,10 @@ namespace Siphon.Pages
             var thumb = originalPath.Replace(".mp4", "_preview.jpg");
             var preview = originalPath.Replace(".mp4", "_preview.mp4");
             var heatmap = originalPath.Replace(".mp4", ".json");
-            if (System.IO.File.Exists(thumb)) System.IO.File.Delete(thumb);
-            if (System.IO.File.Exists(preview)) System.IO.File.Delete(preview);
-            if (System.IO.File.Exists(heatmap)) System.IO.File.Delete(heatmap);
+
+            try { System.IO.File.Delete(thumb); } catch { }
+            try { System.IO.File.Delete(preview); } catch { }
+            try { System.IO.File.Delete(heatmap); } catch { }
         }
     }
 }

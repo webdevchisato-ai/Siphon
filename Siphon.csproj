@@ -30,6 +30,7 @@
     <Folder Include="Config\" />
     <Folder Include="wwwroot\Approved\" />
     <Folder Include="wwwroot\Extra_Approved\" />
+    <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
   </ItemGroup>
 
