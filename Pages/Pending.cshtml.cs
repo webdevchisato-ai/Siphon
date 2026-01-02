@@ -13,6 +13,7 @@ namespace Siphon.Pages
         public string ThumbPath { get; set; }
         public string FullPath { get; set; }
         public bool IsProcessing { get; set; }
+        public List<int> VolumeData { get; set; } = new();
     }
 
     [IgnoreAntiforgeryToken]
@@ -20,11 +21,13 @@ namespace Siphon.Pages
     {
         private readonly IWebHostEnvironment _env;
         private readonly PreviewGenerator _previewGenerator;
+        private readonly UserService _userService;
 
-        public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator)
+        public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator, UserService userService)
         {
             _env = env;
             _previewGenerator = previewGenerator;
+            _userService = userService;
         }
 
         public List<PendingFile> Files { get; set; } = new();
@@ -93,9 +96,31 @@ namespace Siphon.Pages
                 string previewName = baseName + "_preview.mp4";
                 string thumbPath = Path.Combine(pendingDir, thumbName);
                 string previewPath = Path.Combine(pendingDir, previewName);
+                string jsonName = baseName + ".json";
+                string jsonPath = Path.Combine(pendingDir, jsonName);
+
+                List<int> volumeData = new();
+                if (System.IO.File.Exists(jsonPath))
+                {
+                    try
+                    {
+                        var jsonContent = System.IO.File.ReadAllText(jsonPath);
+                        volumeData = JsonSerializer.Deserialize<List<int>>(jsonContent) ?? new();
+                    }
+                    catch { /* ignore read errors */ }
+                }
 
                 bool isProcessing = _previewGenerator.IsProcessing(file.FullName);
-                bool assetsMissing = !System.IO.File.Exists(thumbPath) || !System.IO.File.Exists(previewPath);
+                bool assetsMissing = false;
+
+                if (_userService.GetGenerateHeatmapStatus())
+                {
+                    assetsMissing = !System.IO.File.Exists(thumbPath) || !System.IO.File.Exists(previewPath) || !System.IO.File.Exists(jsonPath);
+                }
+                else
+                {
+                    assetsMissing = !System.IO.File.Exists(thumbPath) || !System.IO.File.Exists(previewPath);
+                }
 
                 if (assetsMissing && !isProcessing && !file.Name.Contains(".part"))
                 {
@@ -103,15 +128,31 @@ namespace Siphon.Pages
                     isProcessing = true;
                 }
 
-                Files.Add(new PendingFile
+                if (_userService.GetGenerateHeatmapStatus())
                 {
-                    Name = file.Name,
-                    FullPath = file.FullName,
-                    OriginalVideoUrl = $"/Pending/{file.Name}",
-                    PreviewVideoUrl = $"/Pending/{previewName}",
-                    ThumbPath = $"/Pending/{thumbName}",
-                    IsProcessing = isProcessing
-                });
+                    Files.Add(new PendingFile
+                    {
+                        Name = file.Name,
+                        FullPath = file.FullName,
+                        OriginalVideoUrl = $"/Pending/{file.Name}",
+                        PreviewVideoUrl = $"/Pending/{previewName}",
+                        ThumbPath = $"/Pending/{thumbName}",
+                        IsProcessing = isProcessing,
+                        VolumeData = volumeData
+                    });
+                }
+                else
+                {
+                    Files.Add(new PendingFile
+                    {
+                        Name = file.Name,
+                        FullPath = file.FullName,
+                        OriginalVideoUrl = $"/Pending/{file.Name}",
+                        PreviewVideoUrl = $"/Pending/{previewName}",
+                        ThumbPath = $"/Pending/{thumbName}",
+                        IsProcessing = isProcessing,
+                    });
+                }
             }
         }
 
@@ -146,8 +187,10 @@ namespace Siphon.Pages
         {
             var thumb = Path.ChangeExtension(originalPath, ".jpg");
             var preview = originalPath.Replace(".mp4", "_preview.mp4");
+            var heatmap = originalPath.Replace(".mp4", ".json");
             if (System.IO.File.Exists(thumb)) System.IO.File.Delete(thumb);
             if (System.IO.File.Exists(preview)) System.IO.File.Delete(preview);
+            if (System.IO.File.Exists(heatmap)) System.IO.File.Delete(heatmap);
         }
     }
 }

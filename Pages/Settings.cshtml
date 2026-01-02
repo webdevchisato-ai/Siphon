@@ -49,6 +49,18 @@
                             </div>
                         </div>
 
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Preferences</h6>
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" asp-for="generateHeatmap" />
+                                    <label class="form-check-label fw-bold small" asp-for="generateHeatmap">
+                                        Generate volume heatmaps for pending videos
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
                         <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Cleanup Policy</h6>
                         <div class="row g-3 mb-4">
                             <div class="col-md-6">

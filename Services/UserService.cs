@@ -11,6 +11,7 @@ namespace Siphon.Services
         public string Salt { get; set; }
         public int PendingPreservationMinutes { get; set; } = 2880;
         public int ApporvedRetentionMins { get; set; } = 60;
+        public bool GenerateHeatmap { get; set; } = true;
     }
 
     public class UserService
@@ -53,20 +54,29 @@ namespace Siphon.Services
             catch { return null; }
         }
 
-        public void CreateUser(string username, string password, int preservationMinutes, int approvedPresservationMinutes)
+        public bool GetGenerateHeatmapStatus()
+        {
+            var config = GetUserConfig();
+            if (config == null) return true; // Default to true if no config
+            return config.GenerateHeatmap;
+
+        }
+
+        public void CreateUser(string username, string password, int preservationMinutes, int approvedPresservationMinutes, bool generateHeatmap)
         {
             // Initial creation
             var config = new UserConfig
             {
                 Username = username,
                 PendingPreservationMinutes = preservationMinutes,
-                ApporvedRetentionMins = approvedPresservationMinutes
+                ApporvedRetentionMins = approvedPresservationMinutes,
+                GenerateHeatmap = generateHeatmap
             };
             SetPassword(config, password);
             SaveConfig(config);
         }
 
-        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins)
+        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins, bool generateHeatmap)
         {
             // Load existing to preserve Salt/Hash if password isn't changing
             var config = GetUserConfig() ?? new UserConfig();
@@ -74,6 +84,7 @@ namespace Siphon.Services
             config.Username = username;
             config.PendingPreservationMinutes = preservationMinutes;
             config.ApporvedRetentionMins = ApporvedRetentionMins;
+            config.GenerateHeatmap = generateHeatmap;
 
             if (!string.IsNullOrWhiteSpace(newPassword))
             {

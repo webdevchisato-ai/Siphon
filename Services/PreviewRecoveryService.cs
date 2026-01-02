@@ -67,12 +67,14 @@ namespace Siphon.Services
 
                     string thumbPath = Path.ChangeExtension(videoPath, ".jpg");
                     string previewPath = videoPath.Replace(".mp4", "_preview.mp4");
+                    string heatmapPath = videoPath.Replace(".mp4", ".json");
 
                     // Check if either the thumbnail or the preview video is missing
                     bool missingThumbnail = !File.Exists(thumbPath);
                     bool missingPreview = !File.Exists(previewPath);
+                    bool missingHeatmap = !File.Exists(heatmapPath);
 
-                    if (missingThumbnail || missingPreview)
+                    if (missingThumbnail || missingPreview || missingHeatmap)
                     {
                         // Ensure we don't queue something currently being processed
                         if (!_previewGenerator.IsProcessing(videoPath))
