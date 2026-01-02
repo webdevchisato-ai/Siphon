@@ -52,7 +52,7 @@ namespace Siphon.Services
 
             try
             {
-                string thumbPath = Path.ChangeExtension(videoPath, ".jpg");
+                string thumbPath = videoPath.Replace(".mp4", "_preview.jpg");
                 string previewPath = videoPath.Replace(".mp4", "_preview.mp4");
 
                 // 1. Generate Thumbnail

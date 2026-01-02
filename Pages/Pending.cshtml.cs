@@ -92,7 +92,7 @@ namespace Siphon.Pages
             foreach (var file in files)
             {
                 string baseName = Path.GetFileNameWithoutExtension(file.Name);
-                string thumbName = baseName + ".jpg";
+                string thumbName = baseName + "_preview.jpg";
                 string previewName = baseName + "_preview.mp4";
                 string thumbPath = Path.Combine(pendingDir, thumbName);
                 string previewPath = Path.Combine(pendingDir, previewName);
@@ -185,7 +185,7 @@ namespace Siphon.Pages
 
         private void CleanupExtras(string originalPath)
         {
-            var thumb = Path.ChangeExtension(originalPath, ".jpg");
+            var thumb = originalPath.Replace(".mp4", "_preview.jpg");
             var preview = originalPath.Replace(".mp4", "_preview.mp4");
             var heatmap = originalPath.Replace(".mp4", ".json");
             if (System.IO.File.Exists(thumb)) System.IO.File.Delete(thumb);

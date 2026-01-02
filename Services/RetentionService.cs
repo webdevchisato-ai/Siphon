@@ -141,12 +141,15 @@ namespace Siphon.Services
                             file.Delete();
 
                             // Delete Thumbnail
-                            string thumb = Path.ChangeExtension(file.FullName, ".jpg");
+                            string thumb = file.FullName.Replace(".mp4", "_preview.jpg");
                             if (File.Exists(thumb)) File.Delete(thumb);
 
                             // Delete Preview
                             string preview = file.FullName.Replace(".mp4", "_preview.mp4");
                             if (File.Exists(preview)) File.Delete(preview);
+
+                            string heatmap = file.FullName.Replace(".mp4", ".json");
+                            if (File.Exists(heatmap)) File.Delete(heatmap);
                         }
                         catch (Exception ex)
                         {

@@ -30,7 +30,7 @@ namespace Siphon.Pages
             int pendingCount = 0;
             if (Directory.Exists(pendingPath))
             {
-                pendingCount = Directory.GetFiles(pendingPath).Where(a => !a.Contains(".part") && !a.Contains("_preview") && !a.Contains(".jpg") && !a.Contains(".ytdl") && !a.Contains(".json")).ToList().Count;
+                pendingCount = Directory.GetFiles(pendingPath).Where(a => !a.Contains(".part") && !a.Contains("_preview") && !a.Contains("_preview.jpg") && !a.Contains(".ytdl") && !a.Contains(".json")).ToList().Count;
             }
 
             string storageText = "Unknown";

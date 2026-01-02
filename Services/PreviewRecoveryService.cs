@@ -65,7 +65,7 @@ namespace Siphon.Services
                     // Skip the actual preview files themselves
                     if (videoPath.EndsWith("_preview.mp4", StringComparison.OrdinalIgnoreCase)) continue;
 
-                    string thumbPath = Path.ChangeExtension(videoPath, ".jpg");
+                    string thumbPath = videoPath.Replace(".mp4", "_preview.jpg");
                     string previewPath = videoPath.Replace(".mp4", "_preview.mp4");
                     string heatmapPath = videoPath.Replace(".mp4", ".json");
 
