@@ -70,7 +70,14 @@ namespace Siphon.Pages
 
         public IActionResult OnPostDeny(string fileName)
         {
-            DeleteFileSet(fileName);
+            string currentFile = fileName;
+
+            // Fire and forget the delete operation
+            Task.Run(() =>
+            {
+                DeleteFileSet(currentFile);
+            });
+
             return RedirectToPage();
         }
 
