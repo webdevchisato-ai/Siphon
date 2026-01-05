@@ -130,7 +130,7 @@
                                 else
                                 {
                                     <form method="post" class="d-flex gap-2">
-                                        <input type="hidden" name="fileName" value="@file.Name" onsubmit="this.closest('.col').style.display='none'" />
+                                        <input type="hidden" name="fileName" value="@file.Name" onsubmit="this.closest('.col').style.display='none'; setTimeout(function(){ location.reload(); }, 1000);" />
 
                                         @if (Model.ApprovalDirectories.Count > 1)
                                         {
