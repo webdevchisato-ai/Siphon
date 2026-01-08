@@ -23,6 +23,8 @@ namespace Siphon.Pages
         private readonly PreviewGenerator _previewGenerator;
         private readonly UserService _userService;
 
+        private static Dictionary<string, DateTime> oldPendingFiles; //file name, time added
+
         public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator, UserService userService)
         {
             _env = env;
@@ -39,6 +41,13 @@ namespace Siphon.Pages
         {
             LoadApprovalDirectories();
             LoadFiles();
+            foreach (var key in oldPendingFiles.Keys.ToList())
+            {
+                if ((DateTime.Now - oldPendingFiles[key]).TotalSeconds > 30)
+                {
+                    oldPendingFiles.Remove(key);
+                }
+            }
         }
 
         // Updated handler accepts targetDir
@@ -47,7 +56,7 @@ namespace Siphon.Pages
             // 1. Capture the variables we need so they are safe to use in the background thread
             string currentFileName = fileName;
             string currentTarget = targetDir;
-
+            oldPendingFiles.Add(fileName, DateTime.Now);
             // 2. Run the file operations in a background thread
             Task.Run(() =>
             {
@@ -71,7 +80,7 @@ namespace Siphon.Pages
         public IActionResult OnPostDeny(string fileName)
         {
             string currentFile = fileName;
-
+            oldPendingFiles.Add(fileName, DateTime.Now);
             // Fire and forget the delete operation
             Task.Run(() =>
             {
@@ -107,6 +116,10 @@ namespace Siphon.Pages
         {
             // ... (Same logic as your existing OnGet file loading) ...
             // [I omitted the repeated code for brevity, insert your existing file loading logic here]
+            if (oldPendingFiles == null)
+            {
+                oldPendingFiles = new Dictionary<string, DateTime>();
+            }
 
             var pendingDir = Path.Combine(_env.WebRootPath, "Pending");
             if (!Directory.Exists(pendingDir)) Directory.CreateDirectory(pendingDir);
@@ -155,30 +168,33 @@ namespace Siphon.Pages
                     isProcessing = true;
                 }
 
-                if (_userService.GetGenerateHeatmapStatus())
+                if (!oldPendingFiles.Keys.Contains(file.Name))
                 {
-                    Files.Add(new PendingFile
+                    if (_userService.GetGenerateHeatmapStatus())
                     {
-                        Name = file.Name,
-                        FullPath = file.FullName,
-                        OriginalVideoUrl = $"/Pending/{file.Name}",
-                        PreviewVideoUrl = $"/Pending/{previewName}",
-                        ThumbPath = $"/Pending/{thumbName}",
-                        IsProcessing = isProcessing,
-                        VolumeData = volumeData
-                    });
-                }
-                else
-                {
-                    Files.Add(new PendingFile
+                        Files.Add(new PendingFile
+                        {
+                            Name = file.Name,
+                            FullPath = file.FullName,
+                            OriginalVideoUrl = $"/Pending/{file.Name}",
+                            PreviewVideoUrl = $"/Pending/{previewName}",
+                            ThumbPath = $"/Pending/{thumbName}",
+                            IsProcessing = isProcessing,
+                            VolumeData = volumeData
+                        });
+                    }
+                    else
                     {
-                        Name = file.Name,
-                        FullPath = file.FullName,
-                        OriginalVideoUrl = $"/Pending/{file.Name}",
-                        PreviewVideoUrl = $"/Pending/{previewName}",
-                        ThumbPath = $"/Pending/{thumbName}",
-                        IsProcessing = isProcessing,
-                    });
+                        Files.Add(new PendingFile
+                        {
+                            Name = file.Name,
+                            FullPath = file.FullName,
+                            OriginalVideoUrl = $"/Pending/{file.Name}",
+                            PreviewVideoUrl = $"/Pending/{previewName}",
+                            ThumbPath = $"/Pending/{thumbName}",
+                            IsProcessing = isProcessing,
+                        });
+                    }
                 }
             }
         }
