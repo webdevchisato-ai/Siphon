@@ -93,7 +93,7 @@ namespace Siphon.Pages
         private void LoadApprovalDirectories()
         {
             // Always add the default
-            ApprovalDirectories.Add("Approved");
+            ApprovalDirectories.Add(_userService.GetDefaultApprovedDirName());
 
             var configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "extra_dirs.json");
             if (System.IO.File.Exists(configPath))

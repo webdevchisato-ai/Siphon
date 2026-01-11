@@ -12,6 +12,7 @@ namespace Siphon.Services
         public int PendingPreservationMinutes { get; set; } = 2880;
         public int ApporvedRetentionMins { get; set; } = 60;
         public bool GenerateHeatmap { get; set; } = true;
+        public string DefaultApprovedDirDisplayName { get; set; } = "Approved";
     }
 
     public class UserService
@@ -62,7 +63,15 @@ namespace Siphon.Services
 
         }
 
-        public void CreateUser(string username, string password, int preservationMinutes, int approvedPresservationMinutes, bool generateHeatmap)
+        public string GetDefaultApprovedDirName()
+        {
+            var config = GetUserConfig();
+            if (config == null) return "Approved"; // Default if no config
+            if (string.IsNullOrEmpty(config.DefaultApprovedDirDisplayName)) return "Approved";
+            return config.DefaultApprovedDirDisplayName;
+        }
+
+        public void CreateUser(string username, string password, int preservationMinutes, int approvedPresservationMinutes, bool generateHeatmap, string defaultArrpovedDir)
         {
             // Initial creation
             var config = new UserConfig
@@ -70,13 +79,14 @@ namespace Siphon.Services
                 Username = username,
                 PendingPreservationMinutes = preservationMinutes,
                 ApporvedRetentionMins = approvedPresservationMinutes,
-                GenerateHeatmap = generateHeatmap
+                GenerateHeatmap = generateHeatmap,
+                DefaultApprovedDirDisplayName = defaultArrpovedDir
             };
             SetPassword(config, password);
             SaveConfig(config);
         }
 
-        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins, bool generateHeatmap)
+        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins, bool generateHeatmap, string defaultArrpovedDir)
         {
             // Load existing to preserve Salt/Hash if password isn't changing
             var config = GetUserConfig() ?? new UserConfig();
@@ -85,6 +95,7 @@ namespace Siphon.Services
             config.PendingPreservationMinutes = preservationMinutes;
             config.ApporvedRetentionMins = ApporvedRetentionMins;
             config.GenerateHeatmap = generateHeatmap;
+            config.DefaultApprovedDirDisplayName = defaultArrpovedDir;
 
             if (!string.IsNullOrWhiteSpace(newPassword))
             {

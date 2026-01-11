@@ -25,6 +25,7 @@ namespace Siphon.Pages
         [BindProperty] public int ApprovedRetentionValue { get; set; } = 1;
         [BindProperty] public string ApprovedRetentionUnit { get; set; } = "Hours";
         [BindProperty] public bool generateHeatmap { get; set; } = true;
+        [BindProperty] public string DefaultApprovedDirName { get; set; } = "Approved";
 
         public IActionResult OnGet()
         {
@@ -58,7 +59,7 @@ namespace Siphon.Pages
             }
 
             // 2. Create User
-            _userService.CreateUser(Username, Password, minutes, approvedMinutes, generateHeatmap);
+            _userService.CreateUser(Username, Password, minutes, approvedMinutes, generateHeatmap, DefaultApprovedDirName);
 
             // 3. Sanitize and Save Directories
             var cleanDirs = ExtraDirectories

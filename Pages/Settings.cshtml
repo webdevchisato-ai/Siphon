@@ -50,14 +50,22 @@
                         </div>
 
                         <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Preferences</h6>
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-6">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch" asp-for="generateHeatmap" />
-                                    <label class="form-check-label fw-bold small" asp-for="generateHeatmap">
-                                        Generate volume heatmaps for pending videos
-                                    </label>
-                                </div>
+                        <div class="mb-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" asp-for="generateHeatmap" />
+                                <label class="form-check-label fw-bold small" asp-for="generateHeatmap">
+                                    Generate volume heatmaps for pending videos
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small text-wrap">Default Approved Directory Name</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="bi bi-folder"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0" asp-for="DefaultApprovedDirName" />
                             </div>
                         </div>
 

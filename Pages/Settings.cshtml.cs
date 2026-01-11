@@ -35,6 +35,7 @@ namespace Siphon.Pages
         [BindProperty] public int ApprovedRetentionValue { get; set; }
         [BindProperty] public string ApprovedRetentionUnit { get; set; }
         [BindProperty] public bool generateHeatmap { get; set; }
+        [BindProperty] public string DefaultApprovedDirName { get; set; }
 
         public void OnGet()
         {
@@ -58,6 +59,7 @@ namespace Siphon.Pages
                 else { ApprovedRetentionValue = userConfig.ApporvedRetentionMins; ApprovedRetentionUnit = "Minutes"; }
 
                 generateHeatmap = userConfig.GenerateHeatmap;
+                DefaultApprovedDirName = userConfig.DefaultApprovedDirDisplayName;
             }
 
             // 2. Load Existing Directories
@@ -96,7 +98,7 @@ namespace Siphon.Pages
             }
 
             // 2. Update User Config
-            _userService.UpdateConfiguration(Username, Password, minutes, approvedMinutes, generateHeatmap);
+            _userService.UpdateConfiguration(Username, Password, minutes, approvedMinutes, generateHeatmap, DefaultApprovedDirName);
 
             // 3. Handle Directory Logic (Create New & Delete Removed)
 

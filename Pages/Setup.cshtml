@@ -69,6 +69,10 @@
                                     <label class="form-label fw-bold small">Would you like to generate volume heatmaps, for the pending videos</label>
                                     <input type="checkbox" class="form-check" asp-for="generateHeatmap" />
                                 </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold small">Name of the Default Approved Dir (this is not changed in the docker config)</label>
+                                    <input type="text" class="form-control border-start-0" asp-for="DefaultApprovedDirName" />
+                                </div>
                             </div>
 
                             <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Cleanup Policy</h6>
