@@ -128,6 +128,7 @@ namespace Siphon.Pages
             var files = dirInfo.GetFiles("*.mp4")
                                .Where(f => !f.Name.EndsWith("_preview.mp4"))
                                .OrderByDescending(f => f.CreationTime);
+            
 
             foreach (var file in files)
             {

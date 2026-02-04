@@ -1,5 +1,6 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Diagnostics;
 using System.Net;
+using System.Text.RegularExpressions;
 
 namespace Siphon.Services
 {
@@ -96,6 +97,58 @@ namespace Siphon.Services
                 try { File.Delete(path); } catch { }
             }
             File.Move(tempPath, path);
+        }
+
+        public static async Task<string> ConvertToMp4Async(string inputPath, DownloadJob job, CancellationToken token)
+        {
+            string directory = Path.GetDirectoryName(inputPath);
+            string fileNameNoExt = Path.GetFileNameWithoutExtension(inputPath);
+            string outputPath = Path.Combine(directory, $"{fileNameNoExt}.mp4");
+
+            // Safety check: Don't convert if it's already mp4 (should be handled by caller, but safe to check)
+            if (string.Equals(Path.GetExtension(inputPath), ".mp4", StringComparison.OrdinalIgnoreCase))
+            {
+                return inputPath;
+            }
+
+            job.Status = "Converting to MP4...";
+
+            // Command: 
+            // -y: Overwrite output
+            // -i: Input file
+            // -c:v libx264: Use H.264 video codec
+            // -c:a aac: Use AAC audio codec
+            // -movflags +faststart: Move metadata to start of file (good for web playback)
+            string args = $"-y -i \"{inputPath}\" -c:v libx264 -c:a aac -movflags +faststart \"{outputPath}\"";
+
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = args,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true, // FFmpeg writes stats to stderr
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            // We can wait for exit. 
+            // Note: Parsing FFmpeg progress from stderr is possible but complex. 
+            // For now, an indeterminate status is usually fine for conversion.
+            await process.WaitForExitAsync(token);
+
+            if (process.ExitCode == 0)
+            {
+                // Conversion success: Delete the original non-mp4 file
+                try { if (File.Exists(inputPath)) File.Delete(inputPath); } catch { }
+                return outputPath;
+            }
+            else
+            {
+                throw new Exception($"FFmpeg conversion failed with code {process.ExitCode}");
+            }
         }
     }
 }

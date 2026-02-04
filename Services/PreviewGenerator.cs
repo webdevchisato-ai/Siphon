@@ -55,19 +55,21 @@ namespace Siphon.Services
                 string thumbPath = videoPath.Replace(".mp4", "_preview.jpg");
                 string previewPath = videoPath.Replace(".mp4", "_preview.mp4");
 
+                double duration = await GetVideoDuration(videoPath);
+
+                if (duration <= 0) duration = 0;
+
                 // 1. Generate Thumbnail
                 if (!File.Exists(thumbPath))
                 {
-                    // Use -ss 00:00:01 for very short videos to ensure we get a frame
-                    // If video is < 1s, ffmpeg usually defaults to the first frame anyway
-                    await RunFfmpeg($"-y -ss 00:00:01 -i \"{videoPath}\" -frames:v 1 -q:v 5 \"{thumbPath}\"");
+                    string seekTime = (duration > 1.1) ? "00:00:01" : "00:00:00";
+
+                    await RunFfmpeg($"-y -ss {seekTime} -i \"{videoPath}\" -frames:v 1 -q:v 5 \"{thumbPath}\"");
                 }
 
                 // 2. Generate Preview Video
                 if (!File.Exists(previewPath))
                 {
-                    double duration = await GetVideoDuration(videoPath);
-
                     if (duration > 10)
                     {
                         // --- LONG VIDEO (>10s): Create 3-part Montage ---

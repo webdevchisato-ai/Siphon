@@ -16,6 +16,8 @@ namespace Siphon.Services
         private readonly string _configPath;
         private string _phpSessId = "";
         private string _eprns = "";
+        private string _coomerSession = "";
+        private string _kemonoSession = "";
 
         public VideoDownloader(IWebHostEnvironment env, ILogger<VideoDownloader> logger)
         {
@@ -56,6 +58,10 @@ namespace Siphon.Services
                     await new PornHubDownloader(_downloadPath, "https://pornhubfans.com", job.Url, job).Download(token);
                 else if (job.Url.Contains("hanime.tv"))
                     await new HanimeDownloader(_downloadPath, job.Url, job, _logger).Download(token);
+                else if (job.Url.Contains("coomer.st"))
+                    await new CoomerDownloader(_downloadPath, job.Url, job, _coomerSession, _logger).Download(token);
+                else if (job.Url.Contains("kemono.cr"))
+                    await new KemonoDownloader(_downloadPath, job.Url, job, _kemonoSession, _logger).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 
@@ -423,6 +429,8 @@ namespace Siphon.Services
                         var trimmed = line.Trim();
                         if (trimmed.StartsWith("PHPSESSID=")) _phpSessId = trimmed.Substring(10).Trim();
                         if (trimmed.StartsWith("EPRNS=")) _eprns = trimmed.Substring(6).Trim();
+                        if (trimmed.StartsWith("COOMER_SESSION=")) _coomerSession = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("KEMONO_SESSION=")) _kemonoSession = trimmed.Substring(15).Trim();
                     }
                 }
             }

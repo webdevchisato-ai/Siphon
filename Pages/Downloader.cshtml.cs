@@ -31,6 +31,12 @@ namespace Siphon.Pages
         public string Eprns { get; set; }
 
         [BindProperty]
+        public string CoomerSession { get; set; }
+
+        [BindProperty]
+        public string KemonoSession { get; set; }
+
+        [BindProperty]
         public int Threads { get; set; } = 3; // Default
 
         public void OnGet()
@@ -105,6 +111,8 @@ namespace Siphon.Pages
                         var trimmed = line.Trim();
                         if (trimmed.StartsWith("PHPSESSID=")) PhpSessId = trimmed.Substring(10).Trim();
                         if (trimmed.StartsWith("EPRNS=")) Eprns = trimmed.Substring(6).Trim();
+                        if (trimmed.StartsWith("COOMER_SESSION=")) CoomerSession = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("KEMONO_SESSION=")) KemonoSession = trimmed.Substring(15).Trim();
                         if (trimmed.StartsWith("THREADS="))
                         {
                             if (int.TryParse(trimmed.Substring(8).Trim(), out int t)) Threads = t;
@@ -123,6 +131,8 @@ namespace Siphon.Pages
                 {
                     $"PHPSESSID={PhpSessId}",
                     $"EPRNS={Eprns}",
+                    $"COOMER_SESSION={CoomerSession}",
+                    $"KEMONO_SESSION={KemonoSession}",
                     $"THREADS={Threads}",
                     "PATH=/app/wwwroot/Pending"
                 };

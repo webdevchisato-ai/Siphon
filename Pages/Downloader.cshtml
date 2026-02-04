@@ -26,26 +26,33 @@
 
             <form method="post" asp-page-handler="UpdateSettings">
                 <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted">PHPSESSID</label>
-                        <input type="text" class="form-control" asp-for="PhpSessId" placeholder="Cookie value..." />
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">PHPSESSID (Eporner)</label>
+                        <input type="text" class="form-control" asp-for="PhpSessId" placeholder="Cookie..." />
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label small text-muted">EPRNS</label>
-                        <input type="text" class="form-control" asp-for="Eprns" placeholder="Cookie value..." />
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">EPRNS (Eporner)</label>
+                        <input type="text" class="form-control" asp-for="Eprns" placeholder="Cookie..." />
                     </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Session (Coomer)</label>
+                        <input type="text" class="form-control" asp-for="CoomerSession" placeholder="Coomer 'session' cookie..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Session (Kemono)</label>
+                        <input type="text" class="form-control" asp-for="KemonoSession" placeholder="Kemono 'session' cookie..." />
+                    </div>
+
                     <div class="col-md-2">
                         <label class="form-label small text-muted">Thread Limit</label>
                         <input type="number" class="form-control" asp-for="Threads" min="1" max="10" />
                     </div>
-                    <div class="col-md-2 d-flex align-items-end">
+                    <div class="col-md-10 d-flex align-items-end">
                         <button type="submit" class="btn btn-dark w-100">
-                            <i class="bi bi-save"></i> Save
+                            <i class="bi bi-save"></i> Save Settings
                         </button>
                     </div>
-                </div>
-                <div class="form-text mt-2">
-                    Save writes to file. <strong>Hot Reload</strong> applies file changes to active Download Manager immediately.
                 </div>
             </form>
         </div>
