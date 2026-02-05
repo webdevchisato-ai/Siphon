@@ -181,7 +181,7 @@ namespace Siphon.Services.LegacyDownloaders
                 string finalDirectUrl = null;
 
                 // Setup filename
-                string safeName = SharedScraperLogic.SanitizeFileName(videoTitle);
+                string safeName = SharedScraperLogic.SanitizeFileName(videoTitle, _path);
                 string fullPath = Path.Combine(_path, $"{safeName}.mp4");
                 _job.FinalFilePath = fullPath;
                 _job.Filename = safeName;

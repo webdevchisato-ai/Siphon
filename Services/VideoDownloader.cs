@@ -122,7 +122,7 @@ namespace Siphon.Services
                         thumb = await TryGetHanimeThumbnail(job.Url);
                     }
 
-                    if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title);
+                    if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title, _downloadPath);
                     if (!string.IsNullOrWhiteSpace(thumb)) job.ThumbnailUrl = thumb;
                 }
                 else
@@ -136,7 +136,7 @@ namespace Siphon.Services
                         thumb = await TryGetHanimeThumbnail(job.Url);
                     }
 
-                    if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title);
+                    if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title, _downloadPath);
                     if (!string.IsNullOrWhiteSpace(thumb)) job.ThumbnailUrl = thumb;
                 }
             }

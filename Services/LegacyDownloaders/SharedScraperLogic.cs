@@ -15,12 +15,18 @@ namespace Siphon.Services
             return Regex.Replace(r, @"\s*\d+p\d+fps.*$", "", RegexOptions.IgnoreCase);
         }
 
-        public static string SanitizeFileName(string n)
+        public static string SanitizeFileName(string n, string downloadPath)
         {
             string asciiOnly = Regex.Replace(n, @"[^\u0000-\u007F]+", "");
             string cleanName = Regex.Replace(asciiOnly, @"[^a-zA-Z0-9 _-]", "");
             cleanName = Regex.Replace(cleanName, @"\s+", " ").Trim();
             if (cleanName.Length > 220) cleanName = cleanName.Substring(0, 220);
+
+            if (File.Exists(Path.Combine(downloadPath, $"{n}.mp4")))
+            {
+                cleanName += $"_{DateTime.Now.Ticks}";
+            }
+
             return string.IsNullOrWhiteSpace(cleanName) ? "Video_Download" : cleanName;
         }
 
@@ -28,6 +34,11 @@ namespace Siphon.Services
         {
             // 1. Define the temporary .part path
             string tempPath = path + ".part";
+
+            if (File.Exists(tempPath))
+            {
+                tempPath = $"{path}_{DateTime.Now.Ticks}.part";
+            }
 
             // Configure HttpClient to use Tor Proxy
             var proxy = new WebProxy(PROXY_URL);

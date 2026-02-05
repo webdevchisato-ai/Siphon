@@ -157,7 +157,7 @@ namespace Siphon.Services.LegacyDownloaders
                 if (string.IsNullOrEmpty(ext)) ext = ".mp4";
 
                 string nameWithoutExt = Path.GetFileNameWithoutExtension(rawFileName);
-                string cleanName = SharedScraperLogic.SanitizeFileName(nameWithoutExt);
+                string cleanName = SharedScraperLogic.SanitizeFileName(nameWithoutExt, _downloadPath);
 
                 if (total > 1 && videosToDownload.Count(v => v.Name == video.Name) > 1)
                 {

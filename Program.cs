@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
 using Siphon.Services;
 
 namespace Siphon
@@ -88,6 +89,24 @@ namespace Siphon
                .WithStaticAssets();
 
             app.Run();
+        }
+    }
+
+    public static class JsonHandler
+    {
+        public static void SerializeJsonFile<T>(string filePath, T obj, bool append = false)
+        {
+            using var writer = new StreamWriter(filePath, append);
+            writer.Write(JsonConvert.SerializeObject(obj));
+        }
+
+        public static T DeserializeJsonFile<T>(string filePath) where T : new()
+        {
+            if (!System.IO.File.Exists(filePath))
+                return new T();
+
+            using var reader = new StreamReader(filePath);
+            return JsonConvert.DeserializeObject<T>(reader.ReadToEnd());
         }
     }
 }

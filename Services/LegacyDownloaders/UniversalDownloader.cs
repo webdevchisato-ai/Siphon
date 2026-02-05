@@ -53,7 +53,7 @@ namespace Siphon.Services.LegacyDownloaders
                     var tEl = await page.QuerySelectorAsync("h1") ?? await page.QuerySelectorAsync("title");
                     if (tEl != null)
                     {
-                        name = SharedScraperLogic.SanitizeFileName(await page.EvaluateFunctionAsync<string>("e => e.innerText", tEl));
+                        name = SharedScraperLogic.SanitizeFileName(await page.EvaluateFunctionAsync<string>("e => e.innerText", tEl), _path);
                     }
                 }
                 catch { }

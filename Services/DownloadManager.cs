@@ -193,6 +193,11 @@ namespace Siphon.Services
             }
         }
 
+        private void AddURLToPendingFiles(string file, string url)
+        {
+
+        }
+
         private void CleanupJobFiles(DownloadJob job)
         {
             try
@@ -241,5 +246,10 @@ namespace Siphon.Services
             }
             catch { }
         }
+    }
+
+    public class PendingVideoUrlContainer
+    {
+        public Dictionary<string, string> Urls { get; set; } = new Dictionary<string, string>(); //<path, url>
     }
 }

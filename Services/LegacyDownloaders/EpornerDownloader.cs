@@ -57,7 +57,7 @@ namespace Siphon.Services.LegacyDownloaders
                     {
                         await page.WaitForSelectorAsync("h1", new WaitForSelectorOptions { Timeout = 5000 }).WaitAsync(token);
                         var h1 = await page.QuerySelectorAsync("h1");
-                        name = SharedScraperLogic.SanitizeFileName(SharedScraperLogic.CleanTitle(await page.EvaluateFunctionAsync<string>("e => e.innerText", h1)));
+                        name = SharedScraperLogic.SanitizeFileName(SharedScraperLogic.CleanTitle(await page.EvaluateFunctionAsync<string>("e => e.innerText", h1)), _path);
                     }
                     catch { name = "Eporner_" + DateTime.Now.Ticks; }
 
