@@ -193,9 +193,26 @@ namespace Siphon.Services
             }
         }
 
-        private void AddURLToPendingFiles(string file, string url)
+        //currently unimplimented, will be added in next release (will show url in the pending files and aprroved pages)
+        private void AddURLToPendingFiles(string filePath, string url)
         {
+            string pendingFilePath = Path.Combine(_env.WebRootPath, "PendingFileURLs.json");
+            var pendingFiles = new PendingVideoUrlContainer();
 
+            if (!File.Exists(pendingFilePath))
+            {
+                var jsonFile = File.Create(pendingFilePath);
+                jsonFile.Close();
+
+                pendingFiles.Urls.Add(filePath, url);
+            }
+            else
+            {
+                pendingFiles = JsonHandler.DeserializeJsonFile<PendingVideoUrlContainer>(pendingFilePath);
+                pendingFiles.Urls.Add(filePath, url);
+            }
+
+            JsonHandler.SerializeJsonFile(pendingFilePath, pendingFiles);
         }
 
         private void CleanupJobFiles(DownloadJob job)
