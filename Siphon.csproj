@@ -32,6 +32,7 @@
     <Folder Include="Services\PhotoDownloaders\" />
     <Folder Include="wwwroot\Approved\" />
     <Folder Include="wwwroot\Extra_Approved\" />
+    <Folder Include="wwwroot\Lookups\" />
     <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
   </ItemGroup>

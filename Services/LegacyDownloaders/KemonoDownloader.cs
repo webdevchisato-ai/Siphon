@@ -131,6 +131,7 @@ namespace Siphon.Services.LegacyDownloaders
 
             var baseUri = new Uri(_url);
             string downloadBase = $"{baseUri.Scheme}://{baseUri.Host}";
+            string mainFileName = "";
 
             foreach (var video in videosToDownload)
             {
@@ -170,6 +171,11 @@ namespace Siphon.Services.LegacyDownloaders
                 _job.Filename = cleanName;
                 _job.FinalFilePath = fullFilePath;
                 _job.Status = (total > 1) ? $"Downloading {count}/{total}: {cleanName}" : $"Downloading: {cleanName}";
+
+                if (count == 1)
+                {
+                    mainFileName = cleanName; // Store the first file's name for potential use in renaming the final output after conversion
+                }
 
                 try
                 {

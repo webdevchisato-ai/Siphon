@@ -163,6 +163,8 @@ namespace Siphon.Services
                     {
                         _previewGenerator.QueueGeneration(job.FinalFilePath);
                     }
+
+                    AddURLToPendingFiles(job.Filename, job.Url);
                 }
             }
             catch (OperationCanceledException)
@@ -194,22 +196,24 @@ namespace Siphon.Services
         }
 
         //currently unimplimented, will be added in next release (will show url in the pending files and aprroved pages)
-        private void AddURLToPendingFiles(string filePath, string url)
+        private void AddURLToPendingFiles(string fileName, string url)
         {
-            string pendingFilePath = Path.Combine(_env.WebRootPath, "PendingFileURLs.json");
+            _logger.LogInformation($"Adding URL to pending files: {url} for file: {fileName}");
+            string pendingFilePath = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
             var pendingFiles = new PendingVideoUrlContainer();
 
             if (!File.Exists(pendingFilePath))
             {
-                var jsonFile = File.Create(pendingFilePath);
-                jsonFile.Close();
-
-                pendingFiles.Urls.Add(filePath, url);
+                pendingFiles.Urls.Add(fileName, url);
             }
             else
             {
                 pendingFiles = JsonHandler.DeserializeJsonFile<PendingVideoUrlContainer>(pendingFilePath);
-                pendingFiles.Urls.Add(filePath, url);
+
+                if (!pendingFiles.Urls.ContainsKey(fileName))
+                {
+                    pendingFiles.Urls.Add(fileName, url);
+                }
             }
 
             JsonHandler.SerializeJsonFile(pendingFilePath, pendingFiles);
@@ -267,6 +271,6 @@ namespace Siphon.Services
 
     public class PendingVideoUrlContainer
     {
-        public Dictionary<string, string> Urls { get; set; } = new Dictionary<string, string>(); //<path, url>
+        public Dictionary<string, string> Urls { get; set; } = new Dictionary<string, string>(); //<filename, url>
     }
 }

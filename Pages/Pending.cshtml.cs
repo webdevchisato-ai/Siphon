@@ -14,6 +14,7 @@ namespace Siphon.Pages
         public string FullPath { get; set; }
         public bool IsProcessing { get; set; }
         public List<int> VolumeData { get; set; } = new();
+        public string downloadedURL { get; set; }
     }
 
     [IgnoreAntiforgeryToken]
@@ -22,14 +23,16 @@ namespace Siphon.Pages
         private readonly IWebHostEnvironment _env;
         private readonly PreviewGenerator _previewGenerator;
         private readonly UserService _userService;
+        private readonly ILogger<PendingModel> _logger;
 
         private static Dictionary<string, DateTime> oldPendingFiles; //file name, time added
 
-        public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator, UserService userService)
+        public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator, UserService userService, ILogger<PendingModel> logger)
         {
             _env = env;
             _previewGenerator = previewGenerator;
             _userService = userService;
+            _logger = logger;
         }
 
         public List<PendingFile> Files { get; set; } = new();
@@ -181,7 +184,8 @@ namespace Siphon.Pages
                             PreviewVideoUrl = $"/Pending/{previewName}",
                             ThumbPath = $"/Pending/{thumbName}",
                             IsProcessing = isProcessing,
-                            VolumeData = volumeData
+                            VolumeData = volumeData,
+                            downloadedURL = GetDownloadedFileUrl(file.Name)
                         });
                     }
                     else
@@ -194,9 +198,58 @@ namespace Siphon.Pages
                             PreviewVideoUrl = $"/Pending/{previewName}",
                             ThumbPath = $"/Pending/{thumbName}",
                             IsProcessing = isProcessing,
+                            downloadedURL = GetDownloadedFileUrl(file.Name)
                         });
                     }
                 }
+            }
+        }
+
+        private string GetDownloadedFileUrl(string fileName)
+        {
+            // 1. Get the base name
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+
+            // 2. Define a local helper to "normalize" strings
+            //    This keeps ONLY letters and numbers and converts to lowercase.
+            //    Example: "My Video (2023)" -> "myvideo2023"
+            //    Example: "My.Video.2023"   -> "myvideo2023"
+            string CleanString(string input)
+            {
+                if (string.IsNullOrEmpty(input)) return string.Empty;
+                // precise filtering: only keep letters or digits
+                return new string(input.Where(c => char.IsLetterOrDigit(c)).ToArray()).ToLowerInvariant();
+            }
+
+            // 3. Prepare our search term
+            string targetCleaned = CleanString(baseName);
+
+            // 4. Load the file
+            string pendingURLFile = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
+            _logger.LogInformation($"Looking for url for {baseName} (Normalized: {targetCleaned})");
+
+            if (!System.IO.File.Exists(pendingURLFile))
+            {
+                _logger.LogInformation($"Pending URL File does not exist");
+                return null;
+            }
+
+            // 5. Check matches
+            var pendingFileURLS = JsonHandler.DeserializeJsonFile<PendingVideoUrlContainer>(pendingURLFile);
+
+            // We look for the FIRST key in the dictionary where the cleaned version matches our target
+            string matchedKey = pendingFileURLS.Urls.Keys
+                                .FirstOrDefault(k => CleanString(k) == targetCleaned);
+
+            if (matchedKey != null)
+            {
+                _logger.LogInformation($"Found downloaded URL for {baseName} (matched via {matchedKey}): {pendingFileURLS.Urls[matchedKey]}");
+                return pendingFileURLS.Urls[matchedKey];
+            }
+            else
+            {
+                _logger.LogInformation($"No downloaded URL found for {baseName}");
+                return null;
             }
         }
 

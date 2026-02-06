@@ -121,6 +121,14 @@
                             <h6 class="card-title text-truncate fw-bold mb-3" title="@file.Name">
                                 @file.Name
                             </h6>
+                            <div class="d-flex align-items-center mb-3 text-secondary"
+                                 style="cursor: pointer;"
+                                 title="Click to copy URL"
+                                 onclick="navigator.clipboard.writeText('@file.downloadedURL'); this.querySelector('span').innerText = 'Copied!'; setTimeout(() => this.querySelector('span').innerText = '@file.downloadedURL', 2000);">
+
+                                <i class="bi bi-link-45deg fs-5 me-2"></i>
+                                <span class="text-truncate fw-bold small">@file.downloadedURL</span>
+                            </div>
 
                             <div class="d-grid gap-2">
                                 @if (file.IsProcessing)

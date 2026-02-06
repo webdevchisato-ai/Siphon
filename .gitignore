@@ -367,4 +367,5 @@ FodyWeavers.xsd
 wwwroot/Pending/
 wwwroot/Approved/
 wwwroot/Extra_Approved/
+wwwroot/Lookup/
 Config

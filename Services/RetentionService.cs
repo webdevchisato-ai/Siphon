@@ -9,6 +9,7 @@ namespace Siphon.Services
         private readonly IWebHostEnvironment _env;
         private Timer pendingTimmer;
         private Timer approvedTimmer;
+        private Timer fileURLTimer;
 
         public RetentionService(ILogger<RetentionService> logger, UserService userService, IWebHostEnvironment env)
         {
@@ -35,6 +36,14 @@ namespace Siphon.Services
 
             approvedTimmer = new Timer(CleanupApprovedFiles, null, TimeSpan.Zero, TimeSpan.FromMinutes(approvedRetention));
 
+            int fileURLMinutes = _userService.GetPreservationMinutes();
+            if (fileURLMinutes <= 0) fileURLMinutes = 60; // Safety default
+
+            _logger.LogInformation($"File URL Service started. Schedule: Every {fileURLMinutes} minutes.");
+
+            // Start timer: Run immediately once (TimeSpan.Zero), then repeat every 'intervalMinutes'
+            pendingTimmer = new Timer(CleanupFileURLStorage, null, TimeSpan.Zero, TimeSpan.FromMinutes(fileURLMinutes));
+
             return Task.CompletedTask;
         }
 
@@ -54,6 +63,7 @@ namespace Siphon.Services
             // period = newMinutes (Repeat interval)
             pendingTimmer?.Change(TimeSpan.FromMinutes(pendingMins), TimeSpan.FromMinutes(pendingMins));
             approvedTimmer?.Change(TimeSpan.FromMinutes(approvedMins), TimeSpan.FromMinutes(approvedMins));
+            fileURLTimer?.Change(TimeSpan.FromMinutes(pendingMins), TimeSpan.FromMinutes(pendingMins)); //timer is the same as pending
         }
 
         private void CleanupApprovedFiles(object state)
@@ -161,6 +171,28 @@ namespace Siphon.Services
             catch (Exception ex)
             {
                 _logger.LogError($"Pending: Retention Service Error: {ex.Message}");
+            }
+        }
+
+        private void CleanupFileURLStorage(object state)
+        {
+            _logger.LogInformation("Pending: File URL retention cleanup.");
+            try
+            {
+                int maxMinutes = _userService.GetPreservationMinutes();
+                if (maxMinutes <= 0) return;
+
+                string pendingFilePath = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
+
+                if (File.Exists(pendingFilePath))
+                {
+                    _logger.LogInformation($"Deleting pending file URL storage");
+                    File.Delete(pendingFilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"File URL Retention Service Error: {ex.Message}");
             }
         }
 

@@ -28,6 +28,7 @@
                             <th scope="col">Approved Under</th>
                             <th scope="col">Size</th>
                             <th scope="col">Date Added</th>
+                            <th scope="col">URL</th>
                             <th scope="col" class="text-end pe-4">Action</th>
                         </tr>
                     </thead>
@@ -42,6 +43,37 @@
                                 <td class="text-muted" style="white-space: nowrap;">@file.ApprovedDirReadable</td>
                                 <td class="text-muted" style="white-space: nowrap;">@file.Size</td>
                                 <td class="text-muted small" style="white-space: nowrap;">@file.Created.ToString("MMM dd, HH:mm")</td>
+                                <td class="text-muted small"
+                                    style="max-width: 200px; cursor: pointer; transition: color 0.2s;"
+                                    title="Click to copy: @file.downloadedURL"
+                                    onclick="
+                                        /* 1. Copy full URL to clipboard */
+                                        navigator.clipboard.writeText('@file.downloadedURL');
+
+                                        /* 2. Get elements */
+                                        var txtSpan = this.querySelector('.url-text');
+                                        var cell = this;
+
+                                        /* 3. Set 'Success' State */
+                                        txtSpan.innerText = 'Copied!';
+                                        txtSpan.classList.remove('text-truncate'); /* Ensure 'Copied!' isn't cut off */
+                                        cell.classList.remove('text-muted');
+                                        cell.classList.add('text-success', 'fw-bold');
+
+                                        /* 4. Revert after 1.5s */
+                                        setTimeout(function() {
+                                            txtSpan.innerText = '@file.downloadedURL';
+                                            txtSpan.classList.add('text-truncate'); /* Turn truncation back on */
+                                            cell.classList.remove('text-success', 'fw-bold');
+                                            cell.classList.add('text-muted');
+                                        }, 1500);
+                                    ">
+
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-link-45deg me-1 flex-shrink-0"></i>
+                                        <span class="url-text text-truncate">@file.downloadedURL</span>
+                                    </div>
+                                </td>
                                 <td class="text-end pe-4">
                                     <a href="@file.Url" download class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-download"></i> Download

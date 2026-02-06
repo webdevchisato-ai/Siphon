@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Siphon.Services;
 using System.Text.Json;
 
 namespace Siphon.Pages
@@ -10,15 +11,18 @@ namespace Siphon.Pages
         public string Url { get; set; }
         public DateTime Created { get; set; }
         public string ApprovedDirReadable { get; set; }
+        public string downloadedURL { get; set; }
     }
 
     public class ApprovedModel : PageModel
     {
         private readonly IWebHostEnvironment _env;
+        private readonly ILogger<ApprovedModel> _logger;
 
-        public ApprovedModel(IWebHostEnvironment env)
+        public ApprovedModel(IWebHostEnvironment env, ILogger<ApprovedModel> logger)
         {
             _env = env;
+            _logger = logger;
         }
 
         public List<ApprovedFile> Files { get; set; } = new();
@@ -43,7 +47,8 @@ namespace Siphon.Pages
                     Size = FormatSize(file.Length),
                     Url = $"/Approved/{file.Name}",
                     Created = file.CreationTime,
-                    ApprovedDirReadable = "Approved"
+                    ApprovedDirReadable = "Approved",
+                    downloadedURL = GetDownloadedFileUrl(file.Name)
                 });
             }
 
@@ -76,9 +81,58 @@ namespace Siphon.Pages
                         Size = FormatSize(file.Length),
                         Url = $"/{dir}/{file.Name}",
                         Created = file.CreationTime,
-                        ApprovedDirReadable = $"{dir.Replace("Extra_Approved", "").Replace("/", "")}"
+                        ApprovedDirReadable = $"{dir.Replace("Extra_Approved", "").Replace("/", "")}",
+                        downloadedURL = GetDownloadedFileUrl(file.Name)
                     });
                 }
+            }
+        }
+
+        private string GetDownloadedFileUrl(string fileName)
+        {
+            // 1. Get the base name
+            string baseName = Path.GetFileNameWithoutExtension(fileName);
+
+            // 2. Define a local helper to "normalize" strings
+            //    This keeps ONLY letters and numbers and converts to lowercase.
+            //    Example: "My Video (2023)" -> "myvideo2023"
+            //    Example: "My.Video.2023"   -> "myvideo2023"
+            string CleanString(string input)
+            {
+                if (string.IsNullOrEmpty(input)) return string.Empty;
+                // precise filtering: only keep letters or digits
+                return new string(input.Where(c => char.IsLetterOrDigit(c)).ToArray()).ToLowerInvariant();
+            }
+
+            // 3. Prepare our search term
+            string targetCleaned = CleanString(baseName);
+
+            // 4. Load the file
+            string pendingURLFile = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
+            _logger.LogInformation($"Looking for url for {baseName} (Normalized: {targetCleaned})");
+
+            if (!System.IO.File.Exists(pendingURLFile))
+            {
+                _logger.LogInformation($"Pending URL File does not exist");
+                return null;
+            }
+
+            // 5. Check matches
+            var pendingFileURLS = JsonHandler.DeserializeJsonFile<PendingVideoUrlContainer>(pendingURLFile);
+
+            // We look for the FIRST key in the dictionary where the cleaned version matches our target
+            string matchedKey = pendingFileURLS.Urls.Keys
+                                .FirstOrDefault(k => CleanString(k) == targetCleaned);
+
+            if (matchedKey != null)
+            {
+                _logger.LogInformation($"Found downloaded URL for {baseName} (matched via {matchedKey}): {pendingFileURLS.Urls[matchedKey]}");
+                return pendingFileURLS.Urls[matchedKey];
+            }
+            else
+            {
+                _logger.LogInformation($"No downloaded URL found for {baseName}");
+                return null;
             }
         }
 
