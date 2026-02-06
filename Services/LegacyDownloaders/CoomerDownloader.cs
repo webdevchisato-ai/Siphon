@@ -181,7 +181,7 @@ namespace Siphon.Services.LegacyDownloaders
                 string fullFilePath = Path.Combine(_downloadPath, finalFileName);
 
                 // 4. Update Job UI
-                _job.Filename = cleanName; // This makes the UI show "amana4_full_xray"
+                _job.Filename = cleanName;
                 _job.FinalFilePath = fullFilePath;
                 _job.Status = (total > 1) ? $"Downloading {count}/{total}: {cleanName}" : $"Downloading: {cleanName}";
 
