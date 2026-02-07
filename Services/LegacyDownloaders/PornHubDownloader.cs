@@ -4,13 +4,13 @@ namespace Siphon.Services.LegacyDownloaders
 {
     public class PornHubDownloader
     {
-        private string _path, _site, _url;
+        private string _path, _downloaderSite, _url;
         private DownloadJob _job;
         private TaskCompletionSource<string> _signal;
 
         public PornHubDownloader(string p, string s, string u, DownloadJob job)
         {
-            _path = p; _site = s; _url = u; _job = job;
+            _path = p; _downloaderSite = s; _url = u; _job = job;
         }
 
         public async Task Download(CancellationToken token)
@@ -47,7 +47,7 @@ namespace Siphon.Services.LegacyDownloaders
                         else try { await e.Request.ContinueAsync(); } catch { }
                     };
 
-                    await page.GoToAsync(_site, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } }).WaitAsync(token);
+                    await page.GoToAsync(_downloaderSite, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded } }).WaitAsync(token);
 
                     await page.WaitForSelectorAsync("input[type='text']").WaitAsync(token);
                     await page.TypeAsync("input[type='text']", _url);
@@ -86,7 +86,7 @@ namespace Siphon.Services.LegacyDownloaders
                     fullPath = Path.Combine(_path, $"{name}.mp4");
                     _job.FinalFilePath = fullPath;
 
-                    await SharedScraperLogic.DownloadWithProgressAsync(dlUrl, fullPath, _site, name, attempt, _job, token);
+                    await SharedScraperLogic.DownloadWithProgressAsync(dlUrl, fullPath, _downloaderSite, name, attempt, _job, token);
                     return;
                 }
                 catch (OperationCanceledException)

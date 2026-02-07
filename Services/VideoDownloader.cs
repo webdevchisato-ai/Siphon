@@ -2,9 +2,10 @@
 using PuppeteerSharp;
 using Siphon.Services.LegacyDownloaders;
 using System.Diagnostics;
-using System.Net; // Required for WebProxy
+using System.Net;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using HtmlAgilityPack;
 
 namespace Siphon.Services
 {
@@ -122,12 +123,22 @@ namespace Siphon.Services
                         thumb = await TryGetHanimeThumbnail(job.Url);
                     }
 
+                    if (job.Url.Contains("kemono.cr") || job.Url.Contains("kemono.su") || job.Url.Contains("kemono.cu") || job.Url.Contains("kemono.st"))
+                    {
+                        thumb = await GetKemonoThumbnailAsync(job.Url, job.Id);
+                    }
+
+                    if (job.Url.Contains("coomer.st") || job.Url.Contains("coomer.su") || job.Url.Contains("coomer.cr") || job.Url.Contains("coomer.su"))
+                    {
+                        thumb = await GetCoomerThumbnailAsync(job.Url, job.Id);
+                    }
+
                     if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title, _downloadPath);
                     if (!string.IsNullOrWhiteSpace(thumb)) job.ThumbnailUrl = thumb;
                 }
                 else
                 {
-                    _logger.LogWarning($"yt-dlp metadata fetch failed with exit code, still attempting to get hanime info {process.ExitCode}");
+                    _logger.LogWarning($"yt-dlp metadata fetch failed with exit code, still attempting to get thrid party video info {process.ExitCode}");
                     string thumb = null;
                     string title = null;
                     if (job.Url.Contains("hanime.tv"))
@@ -136,11 +147,25 @@ namespace Siphon.Services
                         thumb = await TryGetHanimeThumbnail(job.Url);
                     }
 
+                    if (job.Url.Contains("kemono.cr") || job.Url.Contains("kemono.su") || job.Url.Contains("kemono.cu") || job.Url.Contains("kemono.st"))
+                    {
+                        thumb = await GetKemonoThumbnailAsync(job.Url, _kemonoSession);
+                    }
+
+                    if (job.Url.Contains("coomer.st") || job.Url.Contains("coomer.su") || job.Url.Contains("coomer.cr") || job.Url.Contains("coomer.su"))
+                    {
+                        thumb = await GetCoomerThumbnailAsync(job.Url, _coomerSession);
+                    }
+
                     if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title, _downloadPath);
                     if (!string.IsNullOrWhiteSpace(thumb)) job.ThumbnailUrl = thumb;
+                    _logger.LogInformation("Third Party Info Fetch Completed");
                 }
             }
-            catch { }
+            catch (Exception e)
+            { 
+                _logger.LogError($"Error fetching metadata: {e.Message}");
+            }
         }
 
         private async Task<bool> TryYtDlp(DownloadJob job, CancellationToken token)
@@ -316,7 +341,6 @@ namespace Siphon.Services
             }
         }
 
-        // --- UPDATED RULE34 LOGIC ---
         private async Task<string> TryDownloadRule34ThumbnailAsync(string videoUrl, string jobId)
         {
             _logger.LogInformation("Rule34Video Url Identified, Attempting to download preview image");
@@ -415,6 +439,131 @@ namespace Siphon.Services
 
             // Absolute failsafe if Tor fails entirely
             return "/favicon.ico";
+        }
+
+        private async Task<string> GetKemonoThumbnailAsync(string url, string sessionCookie)
+        {
+            _logger.LogInformation("Launching standalone Puppeteer instance for Kemono (First File Mode)");
+            IBrowser browser = null;
+
+            try
+            {
+                await new BrowserFetcher().DownloadAsync();
+                browser = await Puppeteer.LaunchAsync(new LaunchOptions
+                {
+                    Headless = true,
+                    Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
+                });
+
+                using (var page = await browser.NewPageAsync())
+                {
+                    await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+                    if (!string.IsNullOrWhiteSpace(sessionCookie))
+                    {
+                        await page.SetCookieAsync(new CookieParam
+                        {
+                            Name = "session",
+                            Value = sessionCookie,
+                            Domain = ".kemono.cr",
+                            Path = "/",
+                            Secure = true
+                        });
+                    }
+
+                    // Using Networkidle2 ensures the dynamic 'post__files' section has likely loaded
+                    await page.GoToAsync(url, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } });
+
+                    // Ensure the container exists before querying
+                    try { await page.WaitForSelectorAsync(".post__files", new WaitForSelectorOptions { Timeout = 5000 }); }
+                    catch { _logger.LogWarning("Post files container not found within timeout."); }
+
+                    string thumbnailSource = await page.EvaluateFunctionAsync<string>(@"() => {
+                // Select the first image found specifically within the post__files container
+                const firstImg = document.querySelector('.post__files .fileThumb img');
+                
+                if (firstImg) {
+                    // Return src or data-src (data-src is often used for lazy loading)
+                    return firstImg.getAttribute('src') || firstImg.getAttribute('data-src');
+                }
+                return null;
+            }");
+
+                    if (!string.IsNullOrEmpty(thumbnailSource))
+                    {
+                        if (thumbnailSource.StartsWith("//")) thumbnailSource = "https:" + thumbnailSource;
+                        _logger.LogInformation($"First file thumbnail found: {thumbnailSource}");
+                        return thumbnailSource;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Kemono DOM Extraction Error: {ex.Message}");
+            }
+            finally { if (browser != null) await browser.CloseAsync(); }
+
+            return "https://kemono.cr/assets/favicon-CPB6l7kH.ico";
+        }
+
+        private async Task<string> GetCoomerThumbnailAsync(string url, string sessionCookie)
+        {
+            _logger.LogInformation("Launching standalone Puppeteer instance for Coomer (First File Mode)");
+            IBrowser browser = null;
+
+            try
+            {
+                await new BrowserFetcher().DownloadAsync();
+                browser = await Puppeteer.LaunchAsync(new LaunchOptions
+                {
+                    Headless = true,
+                    Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
+                });
+
+                using (var page = await browser.NewPageAsync())
+                {
+                    await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+
+                    if (!string.IsNullOrWhiteSpace(sessionCookie))
+                    {
+                        await page.SetCookieAsync(new CookieParam
+                        {
+                            Name = "session",
+                            Value = sessionCookie,
+                            Domain = ".coomer.st",
+                            Path = "/",
+                            Secure = true
+                        });
+                    }
+
+                    await page.GoToAsync(url, new NavigationOptions { WaitUntil = new[] { WaitUntilNavigation.Networkidle2 } });
+
+                    try { await page.WaitForSelectorAsync(".post__files", new WaitForSelectorOptions { Timeout = 5000 }); }
+                    catch { _logger.LogWarning("Coomer post files container not found."); }
+
+                    string thumbnailSource = await page.EvaluateFunctionAsync<string>(@"() => {
+                const firstImg = document.querySelector('.post__files .fileThumb img');
+                if (firstImg) {
+                    return firstImg.getAttribute('src') || firstImg.getAttribute('data-src');
+                }
+                return null;
+            }");
+
+                    if (!string.IsNullOrEmpty(thumbnailSource))
+                    {
+                        if (thumbnailSource.StartsWith("//")) thumbnailSource = "https:" + thumbnailSource;
+                        _logger.LogInformation($"First file thumbnail found: {thumbnailSource}");
+                        return thumbnailSource;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Coomer DOM Extraction Error: {ex.Message}");
+            }
+            finally { if (browser != null) await browser.CloseAsync(); }
+
+            return "https://coomer.st/assets/favicon-CPB6l7kH.ico";
         }
 
         private void LoadLegacyConfig()
