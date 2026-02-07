@@ -59,9 +59,9 @@ namespace Siphon.Services
                 else if (job.Url.Contains("hanime.tv"))
                     await new HanimeDownloader(_downloadPath, job.Url, job, _logger).Download(token);
                 else if (job.Url.Contains("coomer.st"))
-                    await new CoomerDownloader(_downloadPath, job.Url, job, _coomerSession, _logger).Download(token);
+                    await new CoomerDownloader(_downloadPath, job.Url, job, _coomerSession, _logger, _env).Download(token);
                 else if (job.Url.Contains("kemono.cr"))
-                    await new KemonoDownloader(_downloadPath, job.Url, job, _kemonoSession, _logger).Download(token);
+                    await new KemonoDownloader(_downloadPath, job.Url, job, _kemonoSession, _logger, _env).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 

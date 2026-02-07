@@ -13,14 +13,16 @@ namespace Siphon.Services.LegacyDownloaders
         private DownloadJob _job;
         private string _sessionCookie;
         private readonly ILogger _logger;
+        private readonly IWebHostEnvironment _env;
 
-        public CoomerDownloader(string path, string url, DownloadJob job, string sessionCookie, ILogger logger)
+        public CoomerDownloader(string path, string url, DownloadJob job, string sessionCookie, ILogger logger, IWebHostEnvironment env)
         {
             _downloadPath = path;
             _url = url;
             _job = job;
             _sessionCookie = sessionCookie;
             _logger = logger;
+            _env = env;
         }
 
         public async Task Download(CancellationToken token)
@@ -208,8 +210,32 @@ namespace Siphon.Services.LegacyDownloaders
                     _job.Status = $"Failed file {count}: {ex.Message}";
                     await Task.Delay(2000, token);
                 }
+                AddURLToPendingFiles(cleanName, _url);
                 count++;
             }
+        }
+
+        private void AddURLToPendingFiles(string fileName, string url)
+        {
+            _logger.LogInformation($"Adding URL to pending files: {url} for file: {fileName}");
+            string pendingFilePath = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
+            var pendingFiles = new PendingVideoUrlContainer();
+
+            if (!File.Exists(pendingFilePath))
+            {
+                pendingFiles.Urls.Add(fileName, url);
+            }
+            else
+            {
+                pendingFiles = JsonHandler.DeserializeJsonFile<PendingVideoUrlContainer>(pendingFilePath);
+
+                if (!pendingFiles.Urls.ContainsKey(fileName))
+                {
+                    pendingFiles.Urls.Add(fileName, url);
+                }
+            }
+
+            JsonHandler.SerializeJsonFile(pendingFilePath, pendingFiles);
         }
 
         private bool IsVideo(string path)
