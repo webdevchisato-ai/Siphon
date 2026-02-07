@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Siphon.Services;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace Siphon.Pages
@@ -15,6 +16,7 @@ namespace Siphon.Pages
         public bool IsProcessing { get; set; }
         public List<int> VolumeData { get; set; } = new();
         public string downloadedURL { get; set; }
+        public double videoLenghtSeconds { get; set; }
     }
 
     [IgnoreAntiforgeryToken]
@@ -40,10 +42,10 @@ namespace Siphon.Pages
         // List to hold our approval options
         public List<string> ApprovalDirectories { get; set; } = new();
 
-        public void OnGet()
+        public async Task OnGetAsync()
         {
             LoadApprovalDirectories();
-            LoadFiles();
+            await LoadFiles();
             foreach (var key in oldPendingFiles.Keys.ToList())
             {
                 if ((DateTime.Now - oldPendingFiles[key]).TotalSeconds > 30)
@@ -115,7 +117,7 @@ namespace Siphon.Pages
             }
         }
 
-        private void LoadFiles()
+        private async Task LoadFiles()
         {
             // ... (Same logic as your existing OnGet file loading) ...
             // [I omitted the repeated code for brevity, insert your existing file loading logic here]
@@ -185,7 +187,8 @@ namespace Siphon.Pages
                             ThumbPath = $"/Pending/{thumbName}",
                             IsProcessing = isProcessing,
                             VolumeData = volumeData,
-                            downloadedURL = GetDownloadedFileUrl(file.Name)
+                            downloadedURL = GetDownloadedFileUrl(file.Name),
+                            videoLenghtSeconds = await GetVideoDuration(file.FullName)
                         });
                     }
                     else
@@ -198,11 +201,37 @@ namespace Siphon.Pages
                             PreviewVideoUrl = $"/Pending/{previewName}",
                             ThumbPath = $"/Pending/{thumbName}",
                             IsProcessing = isProcessing,
-                            downloadedURL = GetDownloadedFileUrl(file.Name)
+                            downloadedURL = GetDownloadedFileUrl(file.Name),
+                            videoLenghtSeconds = await GetVideoDuration(file.FullName)
                         });
                     }
                 }
             }
+        }
+
+        private async Task<double> GetVideoDuration(string filePath)
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "ffprobe",
+                // This command returns ONLY the duration in seconds (e.g., 12.500000)
+                Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{filePath}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            };
+
+            using var process = Process.Start(startInfo);
+            string output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (double.TryParse(output.Trim(), out double seconds))
+            {
+                return seconds;
+            }
+
+            return 0;
         }
 
         private string GetDownloadedFileUrl(string fileName)

@@ -121,6 +121,12 @@
                             <h6 class="card-title text-truncate fw-bold mb-3" title="@file.Name">
                                 @file.Name
                             </h6>
+                            <div class="mb-2">
+                                <span class="badge rounded-pill bg-dark-subtle text-dark border">
+                                    <i class="bi bi-play-circle-fill me-1"></i>
+                                    @TimeSpan.FromSeconds(file.videoLenghtSeconds).ToString(file.videoLenghtSeconds >= 3600 ? @"hh\:mm\:ss" : @"mm\:ss")
+                                </span>
+                            </div>
                             <div class="d-flex align-items-center mb-3 text-secondary"
                                  style="cursor: pointer;"
                                  title="Click to copy URL"
