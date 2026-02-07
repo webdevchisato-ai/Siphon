@@ -202,6 +202,11 @@ namespace Siphon.Services
             string pendingFilePath = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
             var pendingFiles = new PendingVideoUrlContainer();
 
+            if (!Directory.Exists(Path.Combine(_env.WebRootPath, "Lookups")))
+            {
+                Directory.CreateDirectory(Path.Combine(_env.WebRootPath, "Lookups"));
+            }
+
             if (!File.Exists(pendingFilePath))
             {
                 pendingFiles.Urls.Add(fileName, url);
