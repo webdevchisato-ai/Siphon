@@ -147,11 +147,11 @@
         <div class="col-md-6">
             <a asp-page="/Downloader" class="text-decoration-none">
                 <div class="card h-100 p-4 shadow-sm hover-card text-center">
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column">
                         <i class="bi bi-download text-primary mb-3" style="font-size: 2.5rem;"></i>
                         <h4 class="card-title text-dark fw-bold">Open Downloader</h4>
                         <p class="card-text text-muted">Start new downloads securely via the Tor network.</p>
-                        <span class="btn btn-primary w-100 mt-2 rounded-pill">Launch</span>
+                        <span class="btn btn-primary w-100 mt-auto rounded-pill">Launch</span>
                     </div>
                 </div>
             </a>
@@ -160,11 +160,11 @@
         <div class="col-md-6">
             <a asp-page="/Pending" class="text-decoration-none">
                 <div class="card h-100 p-4 shadow-sm hover-card text-center">
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column">
                         <i class="bi bi-hourglass-split text-warning mb-3" style="font-size: 2.5rem;"></i>
                         <h4 class="card-title text-dark fw-bold">View Pending</h4>
                         <p class="card-text text-muted">Manage active downloads and queue status.</p>
-                        <span class="btn btn-outline-dark w-100 mt-2 rounded-pill">Manage Queue</span>
+                        <span class="btn btn-outline-dark w-100 mt-auto rounded-pill">Manage Queue</span>
                     </div>
                 </div>
             </a>
@@ -173,11 +173,24 @@
         <div class="col-md-6">
             <a asp-page="/Approved" class="text-decoration-none">
                 <div class="card h-100 p-4 shadow-sm hover-card text-center">
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column">
                         <i class="bi bi-file-earmark-check-fill text-success mb-3" style="font-size: 2.5rem;"></i>
                         <h4 class="card-title text-dark fw-bold">Approved Files</h4>
                         <p class="card-text text-muted">Browse and access your completed downloads.</p>
-                        <span class="btn btn-outline-dark w-100 mt-2 rounded-pill">View Library</span>
+                        <span class="btn btn-outline-dark w-100 mt-auto rounded-pill">View Approved</span>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-6">
+            <a asp-page="/Upload" class="text-decoration-none">
+                <div class="card h-100 p-4 shadow-sm hover-card text-center transition-all">
+                    <div class="card-body d-flex flex-column">
+                        <i class="bi bi-cloud-arrow-up-fill text-primary mb-3" style="font-size: 2.5rem;"></i>
+                        <h4 class="card-title text-dark fw-bold">Upload</h4>
+                        <p class="card-text text-muted">Upload files from your device and associate a URL.</p>
+                        <span class="btn btn-outline-dark w-100 mt-auto rounded-pill">Upload</span>
                     </div>
                 </div>
             </a>
@@ -186,11 +199,11 @@
         <div class="col-md-6">
             <a asp-page="/Settings" class="text-decoration-none">
                 <div class="card h-100 p-4 shadow-sm hover-card text-center">
-                    <div class="card-body">
+                    <div class="card-body d-flex flex-column">
                         <i class="bi bi-gear-fill text-secondary mb-3" style="font-size: 2.5rem;"></i>
                         <h4 class="card-title text-dark fw-bold">Settings</h4>
                         <p class="card-text text-muted">Configure scrapers, paths, and system options.</p>
-                        <span class="btn btn-outline-dark w-100 mt-2 rounded-pill">Configure</span>
+                        <span class="btn btn-outline-dark w-100 mt-auto rounded-pill">Configure</span>
                     </div>
                 </div>
             </a>
