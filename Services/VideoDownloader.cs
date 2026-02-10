@@ -1,11 +1,13 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using HtmlAgilityPack;
+using Microsoft.AspNetCore.SignalR;
+using PuppeteerExtraSharp;
+using PuppeteerExtraSharp.Plugins.ExtraStealth;
 using PuppeteerSharp;
 using Siphon.Services.LegacyDownloaders;
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using HtmlAgilityPack;
 
 namespace Siphon.Services
 {
@@ -19,6 +21,9 @@ namespace Siphon.Services
         private string _eprns = "";
         private string _coomerSession = "";
         private string _kemonoSession = "";
+        private string _cfClearance = "";
+        private string _mangaViewCookie = "";
+        private string _HentaiDudeAgent = "";
 
         public VideoDownloader(IWebHostEnvironment env, ILogger<VideoDownloader> logger)
         {
@@ -63,6 +68,8 @@ namespace Siphon.Services
                     await new CoomerDownloader(_downloadPath, job.Url, job, _coomerSession, _logger, _env).Download(token);
                 else if (job.Url.Contains("kemono.cr"))
                     await new KemonoDownloader(_downloadPath, job.Url, job, _kemonoSession, _logger, _env).Download(token);
+                else if (job.Url.Contains("hentaidude.xxx"))
+                    await new HentaiDudeDownloader(_downloadPath, job.Url, job, _logger, _cfClearance, _mangaViewCookie, _HentaiDudeAgent).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 
@@ -133,6 +140,11 @@ namespace Siphon.Services
                         thumb = await GetCoomerThumbnailAsync(job.Url, job.Id);
                     }
 
+                    if (job.Url.Contains("hentaidude.xxx"))
+                    {
+                        thumb = await TryGetHentaiDudeThumbnail(job.Url, _logger, _cfClearance, _mangaViewCookie, _HentaiDudeAgent);
+                    }
+
                     if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title, _downloadPath);
                     if (!string.IsNullOrWhiteSpace(thumb)) job.ThumbnailUrl = thumb;
                 }
@@ -155,6 +167,11 @@ namespace Siphon.Services
                     if (job.Url.Contains("coomer.st") || job.Url.Contains("coomer.su") || job.Url.Contains("coomer.cr") || job.Url.Contains("coomer.su"))
                     {
                         thumb = await GetCoomerThumbnailAsync(job.Url, _coomerSession);
+                    }
+
+                    if (job.Url.Contains("hentaidude.xxx"))
+                    {
+                        thumb = await TryGetHentaiDudeThumbnail(job.Url, _logger, _cfClearance, _mangaViewCookie, _HentaiDudeAgent);
                     }
 
                     if (!string.IsNullOrWhiteSpace(title)) job.Filename = SharedScraperLogic.SanitizeFileName(title, _downloadPath);
@@ -566,6 +583,133 @@ namespace Siphon.Services
             return "https://coomer.st/assets/favicon-CPB6l7kH.ico";
         }
 
+        public async Task<string> TryGetHentaiDudeThumbnail(string videoUrl, ILogger logger, string cfClearance = "", string mangaViewCookie = "", string userAgent = "")
+        {
+            logger.LogInformation($"[HentaiDude] Attempting to extract thumbnail for: {videoUrl}");
+
+            IBrowser browser = null;
+            string thumbnailUrl = null;
+
+            // Use default UA if not provided
+            string finalUserAgent = !string.IsNullOrEmpty(userAgent)
+                ? userAgent
+                : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36";
+
+            try
+            {
+                // 1. Setup Stealth (Required for Cloudflare)
+                var extra = new PuppeteerExtra();
+                extra.Use(new StealthPlugin());
+
+                try
+                {
+                    await new BrowserFetcher().DownloadAsync();
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError($"Error downloading browser binaries: {ex.Message}");
+                    return null;
+                }
+
+                // 2. Launch Browser
+                browser = await extra.LaunchAsync(new LaunchOptions
+                {
+                    Headless = true,
+                    Args = new[] {
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--window-position=0,0",
+                "--ignore-certificate-errors",
+                "--ignore-certificate-errors-spki-list"
+            }
+                });
+
+                using (var page = await browser.NewPageAsync())
+                {
+                    // 3. Set User Agent
+                    await page.SetUserAgentAsync(finalUserAgent);
+
+                    // 4. Set Cookies
+                    if (!string.IsNullOrEmpty(cfClearance) || !string.IsNullOrEmpty(mangaViewCookie))
+                    {
+                        var targetUri = new Uri(videoUrl);
+                        string domain = targetUri.Host;
+
+                        if (!string.IsNullOrWhiteSpace(cfClearance))
+                        {
+                            await page.SetCookieAsync(new CookieParam { Name = "cf_clearance", Value = cfClearance, Domain = domain, Path = "/" });
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(mangaViewCookie))
+                        {
+                            string cookieName = "manga_view_cookie";
+                            string cookieValue = mangaViewCookie;
+                            if (mangaViewCookie.Contains("="))
+                            {
+                                var parts = mangaViewCookie.Split(new[] { '=' }, 2);
+                                cookieName = parts[0].Trim();
+                                cookieValue = parts[1].Trim();
+                            }
+                            await page.SetCookieAsync(new CookieParam { Name = cookieName, Value = cookieValue, Domain = domain, Path = "/" });
+                        }
+                    }
+
+                    logger.LogInformation("[HentaiDude] Navigating to page for thumbnail...");
+
+                    await page.GoToAsync(videoUrl, new NavigationOptions
+                    {
+                        WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                        Timeout = 30000
+                    });
+
+                    // 5. Check if blocked
+                    string pageTitle = await page.GetTitleAsync();
+                    if (pageTitle.Contains("Just a moment") || pageTitle.Contains("Attention Required"))
+                    {
+                        logger.LogError("[HentaiDude] Cloudflare blocked thumbnail extraction.");
+                        return null;
+                    }
+
+                    // 6. Extract URL (Priority: OpenGraph -> Twitter -> Schema -> Player Poster)
+                    thumbnailUrl = await page.EvaluateFunctionAsync<string>(@"() => {
+                let el = document.querySelector('meta[property=""og:image""]');
+                if (el && el.content) return el.content;
+
+                el = document.querySelector('meta[name=""twitter:image""]');
+                if (el && el.content) return el.content;
+
+                el = document.querySelector('meta[itemprop=""image""]');
+                if (el && el.content) return el.content;
+
+                el = document.querySelector('video#video-player');
+                if (el && el.getAttribute('poster')) return el.getAttribute('poster');
+
+                return null;
+            }");
+                }
+
+                if (!string.IsNullOrEmpty(thumbnailUrl))
+                {
+                    logger.LogInformation($"[HentaiDude] Extracted thumbnail URL: {thumbnailUrl}");
+                }
+                else
+                {
+                    logger.LogWarning("[HentaiDude] Could not find a thumbnail in the page metadata.");
+                }
+
+                await browser.CloseAsync();
+                return thumbnailUrl;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError($"[HentaiDude] Error extracting thumbnail: {ex.Message}");
+                if (browser != null && !browser.IsClosed) await browser.CloseAsync();
+                return null;
+            }
+        }
+
         private void LoadLegacyConfig()
         {
             try
@@ -580,6 +724,9 @@ namespace Siphon.Services
                         if (trimmed.StartsWith("EPRNS=")) _eprns = trimmed.Substring(6).Trim();
                         if (trimmed.StartsWith("COOMER_SESSION=")) _coomerSession = trimmed.Substring(15).Trim();
                         if (trimmed.StartsWith("KEMONO_SESSION=")) _kemonoSession = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("CF_CLEARANCE=")) _cfClearance = trimmed.Substring(13).Trim();
+                        if (trimmed.StartsWith("MANGAVIEW_COOKIE=")) _mangaViewCookie = trimmed.Substring(17).Trim();
+                        if (trimmed.StartsWith("HENTAI_DUDE_AGENT=")) _HentaiDudeAgent = trimmed.Substring(18).Trim();
                     }
                 }
             }

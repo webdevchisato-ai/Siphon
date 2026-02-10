@@ -37,6 +37,15 @@ namespace Siphon.Pages
         public string KemonoSession { get; set; }
 
         [BindProperty]
+        public string CF_CLEARANCE { get; set; }
+
+        [BindProperty]
+        public string MANGAVIEW_COOKIE { get; set; }
+
+        [BindProperty]
+        public string HentaiDudeAgent { get; set; }
+
+        [BindProperty]
         public int Threads { get; set; } = 3; // Default
 
         public void OnGet()
@@ -113,6 +122,9 @@ namespace Siphon.Pages
                         if (trimmed.StartsWith("EPRNS=")) Eprns = trimmed.Substring(6).Trim();
                         if (trimmed.StartsWith("COOMER_SESSION=")) CoomerSession = trimmed.Substring(15).Trim();
                         if (trimmed.StartsWith("KEMONO_SESSION=")) KemonoSession = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("CF_CLEARANCE=")) CF_CLEARANCE = trimmed.Substring(13).Trim();
+                        if (trimmed.StartsWith("MANGAVIEW_COOKIE=")) MANGAVIEW_COOKIE = trimmed.Substring(17).Trim();
+                        if (trimmed.StartsWith("HENTAI_DUDE_AGENT=")) HentaiDudeAgent = trimmed.Substring(18).Trim();
                         if (trimmed.StartsWith("THREADS="))
                         {
                             if (int.TryParse(trimmed.Substring(8).Trim(), out int t)) Threads = t;
@@ -134,6 +146,9 @@ namespace Siphon.Pages
                     $"COOMER_SESSION={CoomerSession}",
                     $"KEMONO_SESSION={KemonoSession}",
                     $"THREADS={Threads}",
+                    $"CF_CLEARANCE={CF_CLEARANCE}",
+                    $"MANGAVIEW_COOKIE={MANGAVIEW_COOKIE}",
+                    $"HENTAI_DUDE_AGENT={HentaiDudeAgent}",
                     "PATH=/app/wwwroot/Pending"
                 };
 
