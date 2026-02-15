@@ -3,9 +3,15 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Siphon.Services;
 using System;
 using System.IO;
+using System.Linq; // Needed for .Count()
+using System.Threading.Tasks;
 
 namespace Siphon.Pages
 {
+    // 1. INCREASE UPLOAD LIMITS
+    // These attributes ensure the function is actually called for large files.
+    [RequestSizeLimit(16_106_127_360)] //15GB
+    [RequestFormLimits(MultipartBodyLengthLimit = 16_106_127_360)]
     public class UploadModel : PageModel
     {
         private readonly IWebHostEnvironment _env;
@@ -31,64 +37,79 @@ namespace Siphon.Pages
 
         public async Task<IActionResult> OnPostAsync()
         {
+            // Debugging Log: Prove we entered the function
+            _logger.LogInformation(">>> OnPostAsync Entered. URL: {TargetUrl}, File: {FileName}",
+                TargetUrl, UploadFile?.FileName ?? "NULL");
+
             if (UploadFile == null || string.IsNullOrEmpty(TargetUrl))
             {
                 ModelState.AddModelError("", "File and URL are required.");
+                // If this hits, the JS will see a 200 OK HTML response and reload the page, 
+                // making it look like 'nothing happened'.
                 return Page();
             }
-
-            _logger.LogInformation("Received file upload: {FileName} for URL: {TargetUrl}", UploadFile.FileName, TargetUrl);
 
             var uploadsFolder = Path.Combine(_env.WebRootPath, "Pending");
             if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
 
-            var filePath = Path.Combine(uploadsFolder, UploadFile.FileName);
+            // --- PART 1: Determine Final Name ---
+            var finalFilePath = Path.Combine(uploadsFolder, UploadFile.FileName);
 
-            if (System.IO.File.Exists(filePath))
+            if (System.IO.File.Exists(finalFilePath))
             {
                 int currentPendingFileCount = new DirectoryInfo(uploadsFolder).GetFiles().Count();
-                _logger.LogWarning($"File already exists: {filePath}. Appending: {currentPendingFileCount}.");
-                filePath = Path.Combine(uploadsFolder, $"{Path.GetFileNameWithoutExtension(UploadFile.FileName)}_{currentPendingFileCount}{Path.GetExtension(UploadFile.FileName)}");
+                _logger.LogWarning($"File already exists: {finalFilePath}. Appending index.");
+                finalFilePath = Path.Combine(uploadsFolder, $"{Path.GetFileNameWithoutExtension(UploadFile.FileName)}_{currentPendingFileCount}{Path.GetExtension(UploadFile.FileName)}");
             }
 
-            // 2. Save the file locally
-            using (var fileStream = new FileStream(filePath, FileMode.Create))
+            // --- PART 2: Save as .part ---
+            var tempFilePath = finalFilePath + ".part";
+
+            try
             {
-                _logger.LogInformation("Saving file to: {FilePath}", filePath);
-                await UploadFile.CopyToAsync(fileStream);
-                _logger.LogInformation("File saved successfully.");
+                using (var fileStream = new FileStream(tempFilePath, FileMode.Create))
+                {
+                    _logger.LogInformation("Streaming file to .part: {TempFilePath}", tempFilePath);
+                    await UploadFile.CopyToAsync(fileStream);
+                }
+
+                // --- PART 3: Rename to Final ---
+                _logger.LogInformation("Rename .part to final: {FinalFilePath}", finalFilePath);
+                System.IO.File.Move(tempFilePath, finalFilePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during file save/rename.");
+                ModelState.AddModelError("", "File save failed.");
+                return Page();
             }
 
-            _logger.LogInformation("Associating file with URL: {TargetUrl}", TargetUrl);
-
+            // --- PART 4: Update Lookup JSON ---
+            _logger.LogInformation("Updating Lookup JSON...");
             string pendingFilePath = Path.Combine(_env.WebRootPath, "Lookups", "PendingFileURLs.json");
             var pendingFiles = new PendingVideoUrlContainer();
-
-            string urlAssocFileName = Path.GetFileNameWithoutExtension(filePath);
+            string urlAssocFileName = Path.GetFileNameWithoutExtension(finalFilePath);
 
             if (!Directory.Exists(Path.Combine(_env.WebRootPath, "Lookups")))
             {
                 Directory.CreateDirectory(Path.Combine(_env.WebRootPath, "Lookups"));
             }
 
-            if (!System.IO.File.Exists(pendingFilePath))
-            {
-                pendingFiles.Urls.Add(urlAssocFileName, TargetUrl);
-            }
-            else
+            if (System.IO.File.Exists(pendingFilePath))
             {
                 pendingFiles = JsonHandler.DeserializeJsonFile<PendingVideoUrlContainer>(pendingFilePath);
+            }
 
-                if (!pendingFiles.Urls.ContainsKey(urlAssocFileName))
-                {
-                    pendingFiles.Urls.Add(urlAssocFileName, TargetUrl);
-                }
+            if (!pendingFiles.Urls.ContainsKey(urlAssocFileName))
+            {
+                pendingFiles.Urls.Add(urlAssocFileName, TargetUrl);
             }
 
             JsonHandler.SerializeJsonFile(pendingFilePath, pendingFiles);
 
-            _logger.LogInformation("Starting preview generation for file: {FilePath}", filePath);
-            _previewGenerator.QueueGeneration(filePath);
+            // --- PART 5: Generate Preview ---
+            _logger.LogInformation("Queueing preview generation...");
+            _previewGenerator.QueueGeneration(finalFilePath);
 
             return RedirectToPage();
         }

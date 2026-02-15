@@ -28,10 +28,11 @@
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow-lg">
                 <form method="post" enctype="multipart/form-data" id="uploadForm">
+                    @Html.AntiForgeryToken()
 
                     <div class="modal-header border-0 pb-0">
                         <h5 class="modal-title">Finalize Upload</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" id="modalCloseBtn"></button>
                     </div>
 
                     <div class="modal-body p-4">
@@ -51,12 +52,22 @@
                             </div>
                         </div>
 
+                        <div id="progressContainer" class="d-none mt-4">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span class="small fw-bold text-muted">Uploading...</span>
+                                <span id="progressText" class="small fw-bold text-primary">0%</span>
+                            </div>
+                            <div class="progress" style="height: 10px;">
+                                <div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </div>
+
                         <input type="file" asp-for="UploadFile" class="d-none" id="fileInput" required />
                     </div>
 
                     <div class="modal-footer border-0 pt-0 px-4 pb-4">
-                        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary px-4">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal" id="cancelBtn">Cancel</button>
+                        <button type="submit" class="btn btn-primary px-4" id="uploadBtn">
                             <i class="bi bi-send-fill me-2"></i>Upload
                         </button>
                     </div>
@@ -95,6 +106,14 @@
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const uploadForm = document.getElementById('uploadForm');
+
+        // UI Elements for Progress
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('uploadProgressBar');
+        const progressText = document.getElementById('progressText');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
 
         // Bootstrap Modal Instance
         const uploadModal = new bootstrap.Modal(document.getElementById('uploadModal'));
@@ -135,8 +154,6 @@
             const files = dt.files;
 
             if (files.length > 0) {
-                // IMPORTANT: We must manually assign the dropped files to the file input
-                // so they are included when the form submits.
                 fileInput.files = files;
                 openModalWithFile(files[0]);
             }
@@ -145,13 +162,84 @@
         // Helper to update UI and show Modal
         function openModalWithFile(file) {
             modalFileName.innerText = file.name;
+            // Reset UI state
+            progressContainer.classList.add('d-none');
+            uploadBtn.disabled = false;
+            cancelBtn.disabled = false;
+            modalCloseBtn.disabled = false;
+            uploadBtn.innerHTML = '<i class="bi bi-send-fill me-2"></i>Upload';
             uploadModal.show();
         }
 
-        // Reset file input if modal is closed without uploading
+        // 4. Handle Form Submission with AJAX for Progress
+        uploadForm.addEventListener('submit', function (e) {
+            e.preventDefault(); // Stop standard form submit
+
+            const formData = new FormData(uploadForm);
+            const xhr = new XMLHttpRequest();
+
+            // Get Anti-Forgery Token
+            const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+            const token = tokenInput ? tokenInput.value : '';
+
+            // Setup UI for upload
+            progressContainer.classList.remove('d-none');
+            uploadBtn.disabled = true;
+            cancelBtn.disabled = true;
+            modalCloseBtn.disabled = true;
+            uploadBtn.innerText = 'Uploading...';
+            progressBar.style.width = '0%';
+            progressText.innerText = '0%';
+
+            // Monitor Progress
+            xhr.upload.addEventListener('progress', function (e) {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percentComplete + '%';
+                    progressText.innerText = percentComplete + '%';
+                }
+            });
+
+            // Handle Completion
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.classList.add('bg-success');
+                    uploadBtn.innerText = 'Done!';
+
+                    // Reload the page to show new state (or follow redirect)
+                    window.location.reload();
+                } else {
+                    // Error Handling
+                    console.error('Upload failed:', xhr.responseText);
+                    alert('Upload failed. Status: ' + xhr.status);
+                    resetModalUI();
+                }
+            };
+
+            xhr.onerror = function () {
+                alert('An error occurred during the upload.');
+                resetModalUI();
+            };
+
+            // Send to the current page URL (OnPostAsync)
+            xhr.open('POST', window.location.href, true);
+
+            // Set the verification token header
+            xhr.setRequestHeader("RequestVerificationToken", token);
+
+            xhr.send(formData);
+        });
+
+        function resetModalUI() {
+            uploadBtn.disabled = false;
+            cancelBtn.disabled = false;
+            modalCloseBtn.disabled = false;
+            uploadBtn.innerHTML = '<i class="bi bi-send-fill me-2"></i>Upload';
+        }
+
         document.getElementById('uploadModal').addEventListener('hidden.bs.modal', () => {
-           // Optional: clear input if you want to force re-selection on close
-           // fileInput.value = '';
+             // Optional clean up
         });
     });
 </script>
