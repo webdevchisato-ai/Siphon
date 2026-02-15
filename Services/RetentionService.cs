@@ -10,6 +10,7 @@ namespace Siphon.Services
         private Timer pendingTimmer;
         private Timer approvedTimmer;
         private Timer fileURLTimer;
+        private Timer cacheTimer;
 
         public RetentionService(ILogger<RetentionService> logger, UserService userService, IWebHostEnvironment env)
         {
@@ -39,10 +40,18 @@ namespace Siphon.Services
             int fileURLMinutes = _userService.GetPreservationMinutes();
             if (fileURLMinutes <= 0) fileURLMinutes = 60; // Safety default
 
-            _logger.LogInformation($"File URL Service started. Schedule: Every {fileURLMinutes} minutes.");
+            _logger.LogInformation($"File URL Retention Service started. Schedule: Every {fileURLMinutes} minutes.");
 
             // Start timer: Run immediately once (TimeSpan.Zero), then repeat every 'intervalMinutes'
-            pendingTimmer = new Timer(CleanupFileURLStorage, null, TimeSpan.Zero, TimeSpan.FromMinutes(fileURLMinutes));
+            fileURLTimer = new Timer(CleanupFileURLStorage, null, TimeSpan.Zero, TimeSpan.FromMinutes(fileURLMinutes));
+
+            int cacheMinutes = _userService.GetCacheRetentionMinutes();
+            if (cacheMinutes <= 0) cacheMinutes = 60; // Safety default
+
+            _logger.LogInformation($"Cache Retention Service. Schedule: Every {cacheMinutes} minutes.");
+
+            // Start timer: Run immediately once (TimeSpan.Zero), then repeat every 'intervalMinutes'
+            cacheTimer = new Timer(CacheRetentionCleanup, null, TimeSpan.Zero, TimeSpan.FromMinutes(cacheMinutes));
 
             return Task.CompletedTask;
         }
@@ -52,11 +61,15 @@ namespace Siphon.Services
         {
             int pendingMins = _userService.GetPreservationMinutes();
             int approvedMins = _userService.GetApprovedRetentionMinutes();
+            int cacheMins = _userService.GetCacheRetentionMinutes();
             if (pendingMins <= 0) pendingMins = 60;
             if (approvedMins <= 0) approvedMins = 60;
+            if (cacheMins <= 0) cacheMins = 60;
 
             _logger.LogInformation($"Pending Retention Interval updated. Next check in {pendingMins} minutes.");
             _logger.LogInformation($"Approved Retention Interval updated. Next check in {approvedMins} minutes.");
+            _logger.LogInformation($"File URL Retention Interval updated. Next check in {pendingMins} minutes.");
+            _logger.LogInformation($"Cache Retention Interval updated. Next check in {cacheMins} minutes.");
 
             // Change(dueTime, period)
             // dueTime = newMinutes (Wait this long before the next run)
@@ -64,6 +77,7 @@ namespace Siphon.Services
             pendingTimmer?.Change(TimeSpan.FromMinutes(pendingMins), TimeSpan.FromMinutes(pendingMins));
             approvedTimmer?.Change(TimeSpan.FromMinutes(approvedMins), TimeSpan.FromMinutes(approvedMins));
             fileURLTimer?.Change(TimeSpan.FromMinutes(pendingMins), TimeSpan.FromMinutes(pendingMins)); //timer is the same as pending
+            cacheTimer?.Change(TimeSpan.FromMinutes(cacheMins), TimeSpan.FromMinutes(cacheMins));
         }
 
         private void CleanupApprovedFiles(object state)
@@ -193,6 +207,41 @@ namespace Siphon.Services
             catch (Exception ex)
             {
                 _logger.LogError($"File URL Retention Service Error: {ex.Message}");
+            }
+        }
+
+        private void CacheRetentionCleanup(object state)
+        {
+            _logger.LogInformation("Cache: Running retention cleanup.");
+            try
+            {
+                int maxMinutes = _userService.GetCacheRetentionMinutes();
+                if (maxMinutes <= 0) return;
+                var externalIntegrationCacheDir = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
+                var VideoThumbnailsCacheDir = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
+                if (!Directory.Exists(externalIntegrationCacheDir)) return;
+                var cutoffTime = DateTime.UtcNow.AddMinutes(-maxMinutes);
+                var files = new DirectoryInfo(externalIntegrationCacheDir).GetFiles().ToList();
+                files.AddRange(new DirectoryInfo(VideoThumbnailsCacheDir).GetFiles());
+                foreach (var file in files)
+                {
+                    if (file.CreationTimeUtc < cutoffTime)
+                    {
+                        _logger.LogInformation($"Retention Policy: Deleting old cache file {file.Name} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
+                        try
+                        {
+                            file.Delete();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError($"Failed to delete cache file {file.Name}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Cache Retention Service Error: {ex.Message}");
             }
         }
 

@@ -36,6 +36,8 @@ namespace Siphon.Pages
         [BindProperty] public string ApprovedRetentionUnit { get; set; }
         [BindProperty] public bool generateHeatmap { get; set; }
         [BindProperty] public string DefaultApprovedDirName { get; set; }
+        [BindProperty] public int CacheRetentionValue { get; set; }
+        [BindProperty] public string CacheRetentionUnit { get; set; }
 
         public void OnGet()
         {
@@ -57,6 +59,13 @@ namespace Siphon.Pages
                 else if (userConfig.ApporvedRetentionMins % 1440 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 1440; ApprovedRetentionUnit = "Days"; }
                 else if (userConfig.ApporvedRetentionMins % 60 == 0) { ApprovedRetentionValue = userConfig.ApporvedRetentionMins / 60; ApprovedRetentionUnit = "Hours"; }
                 else { ApprovedRetentionValue = userConfig.ApporvedRetentionMins; ApprovedRetentionUnit = "Minutes"; }
+
+                if (userConfig.cacheRetentionMinutes % 525600 == 0) { CacheRetentionValue = userConfig.cacheRetentionMinutes / 525600; CacheRetentionUnit = "Years"; }
+                else if (userConfig.cacheRetentionMinutes % 43200 == 0) { CacheRetentionValue = userConfig.cacheRetentionMinutes / 43200; CacheRetentionUnit = "Months"; }
+                else if (userConfig.cacheRetentionMinutes % 10080 == 0) { CacheRetentionValue = userConfig.cacheRetentionMinutes / 10080; CacheRetentionUnit = "Weeks"; }
+                else if (userConfig.cacheRetentionMinutes % 1440 == 0) { CacheRetentionValue = userConfig.cacheRetentionMinutes / 1440; CacheRetentionUnit = "Days"; }
+                else if (userConfig.cacheRetentionMinutes % 60 == 0) { CacheRetentionValue = userConfig.cacheRetentionMinutes / 60; CacheRetentionUnit = "Hours"; }
+                else { CacheRetentionValue = userConfig.cacheRetentionMinutes; CacheRetentionUnit = "Minutes"; }
 
                 generateHeatmap = userConfig.GenerateHeatmap;
                 DefaultApprovedDirName = userConfig.DefaultApprovedDirDisplayName;
@@ -97,8 +106,18 @@ namespace Siphon.Pages
                 case "Years": approvedMinutes *= 525600; break;
             }
 
+            int cacheMinutes = CacheRetentionValue;
+            switch (CacheRetentionUnit)
+            {
+                case "Hours": cacheMinutes *= 60; break;
+                case "Days": cacheMinutes *= 1440; break;
+                case "Weeks": cacheMinutes *= 10080; break;
+                case "Months": cacheMinutes *= 43200; break;
+                case "Years": cacheMinutes *= 525600; break;
+            }
+
             // 2. Update User Config
-            _userService.UpdateConfiguration(Username, Password, minutes, approvedMinutes, generateHeatmap, DefaultApprovedDirName);
+            _userService.UpdateConfiguration(Username, Password, minutes, approvedMinutes, generateHeatmap, DefaultApprovedDirName, cacheMinutes);
 
             // 3. Handle Directory Logic (Create New & Delete Removed)
 
