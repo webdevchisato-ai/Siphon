@@ -76,6 +76,15 @@ namespace Siphon.Pages
         [BindProperty(SupportsGet = true)]
         public int MaxVideoLength { get; set; } = 10000;
 
+        // New property to flag timeouts
+        public bool IsSearchTimeout { get; set; } = false;
+
+        [BindProperty]
+        public string TimeOutMessage { get; set; } = "";
+
+        [BindProperty]
+        public string TimeOutHeader { get; set; } = "";
+
         public class ExternalPost
         {
             public string Id { get; set; }
@@ -92,6 +101,9 @@ namespace Siphon.Pages
 
         public async Task OnGetAsync()
         {
+            TimeOutHeader = "";
+            TimeOutMessage = "";
+
             string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
             if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
 
@@ -119,16 +131,86 @@ namespace Siphon.Pages
             if (rawPosts == null)
             {
                 if (!SearchTriggered) return;
-                rawPosts = await FetchFromApi(Site, SearchUser, Offset);
 
-                if (rawPosts != null && rawPosts.Count > 0)
+                // --- TIMEOUT LOGIC START ---
+                var totalTimeout = TimeSpan.FromMinutes(3);
+                var stopwatch = Stopwatch.StartNew();
+
+                // 1. Fetch Data Task
+                var fetchTask = FetchFromApi(Site, SearchUser, Offset);
+
+                // Wait for Fetch OR Timeout
+                var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
+
+                if (completedFetch != fetchTask)
                 {
-                    // Enrich with video durations before caching
-                    await EnrichWithVideoDurations(rawPosts);
-
-                    string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
-                    await System.IO.File.WriteAllTextAsync(cachePath, json);
+                    // Timed out during API fetch
+                    IsSearchTimeout = true;
+                    _logger.LogWarning("Search timed out during API fetch phase.");
+                    rawPosts = new List<ExternalPost>(); // Return empty if we couldn't even get the list
                 }
+                else
+                {
+                    // Fetch completed successfully
+                    rawPosts = await fetchTask;
+
+                    if (rawPosts.Count() > 0)
+                    {
+                        if (rawPosts[0].Id.Contains("Not Found"))
+                        {
+                            IsSearchTimeout = true;
+                            TimeOutHeader = "Not Found";
+                            TimeOutMessage = "Posts from Listed User Not Found. Please try again later or try a different user.";
+                        }
+
+                        if (rawPosts != null && rawPosts.Count > 0)
+                        {
+                            // Calculate remaining time for enrichment
+                            var elapsed = stopwatch.Elapsed;
+                            var remaining = totalTimeout - elapsed;
+
+                            if (remaining > TimeSpan.Zero)
+                            {
+                                // 2. Enrichment Task
+                                // We create the enrichment task but don't await it directly
+                                var enrichTask = EnrichWithVideoDurations(rawPosts);
+
+                                // Wait for Enrichment OR Remaining Timeout
+                                var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining));
+
+                                if (completedEnrich != enrichTask)
+                                {
+                                    // Timed out during enrichment
+                                    IsSearchTimeout = true;
+                                    _logger.LogWarning("Search timed out during Video Enrichment phase.");
+                                    // We proceed with rawPosts. Some might have durations, some might not.
+                                }
+
+                                // If enrichment finished in time, we are good.
+                                // If it timed out, we just move on. The rawPosts objects are updated by reference 
+                                // as the background tasks complete, so we just display what we have at this moment.
+                            }
+                            else
+                            {
+                                IsSearchTimeout = true;
+                            }
+
+                            // Update cache only if we didn't timeout (to avoid caching partial data)
+                            if (!IsSearchTimeout)
+                            {
+                                string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
+                                await System.IO.File.WriteAllTextAsync(cachePath, json);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        IsSearchTimeout = true;
+                        TimeOutHeader = "API Returned unknown or empty data";
+                        TimeOutMessage = "This could potentially be an API issue or an issue with the search properties, please review the search feilds, and check the apis are accessable";
+                    }
+                }
+                // --- TIMEOUT LOGIC END ---
             }
             else
             {
@@ -136,10 +218,18 @@ namespace Siphon.Pages
                 var postsNeedingDuration = rawPosts.Where(p => p.HasVideo && p.VideoDuration == 0).ToList();
                 if (postsNeedingDuration.Any())
                 {
-                    await EnrichWithVideoDurations(postsNeedingDuration);
-                    // Update cache
-                    string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
-                    await System.IO.File.WriteAllTextAsync(cachePath, json);
+                    // We apply a smaller timeout here for cached items to keep UI snappy, or use the full 3 mins
+                    var enrichTask = EnrichWithVideoDurations(postsNeedingDuration);
+                    var completed = await Task.WhenAny(enrichTask, Task.Delay(TimeSpan.FromMinutes(3)));
+
+                    if (completed != enrichTask) IsSearchTimeout = true;
+
+                    // Update cache if fully successful
+                    if (!IsSearchTimeout)
+                    {
+                        string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
+                        await System.IO.File.WriteAllTextAsync(cachePath, json);
+                    }
                 }
             }
 

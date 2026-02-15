@@ -269,6 +269,31 @@
         </div>
 
         <div class="col-md-9 col-lg-10">
+            @if (Model.IsSearchTimeout)
+            {
+                <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
+                    <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2 fs-4"></i>
+                    <div>
+                        @if (Model.TimeOutHeader == "")
+                        {
+                            <strong>Search Timeout Exceeded (3 mins)</strong>
+                        }
+                        else
+                        {
+                            <strong>@Model.TimeOutHeader</strong>
+                        }
+                        @if (Model.TimeOutMessage == "")
+                        {
+                            <div class="small">The search operation took too long. Partial results are displayed below. Some video durations or thumbnails might be missing.</div>
+                        }
+                        else
+                        {
+                            <div class="small">@Model.TimeOutMessage</div>
+                        }
+                    </div>
+                </div>
+            }
+
             @if (Model.Posts.Count == 0)
             {
                 <div class="text-center py-5">
@@ -336,7 +361,19 @@
                                     @if (post.HasVideo)
                                     {
                                         <span class="position-absolute top-0 end-0 badge bg-danger m-2 shadow-sm">VIDEO</span>
-                                        <span class="duration-badge" data-duration-display style="display: none;">--:--</span>
+                                        <span class="duration-badge" data-duration-display style="display: @(post.VideoDuration > 0 ? "block" : "none");">
+                                            @if (post.VideoDuration > 0)
+                                            {
+                                                TimeSpan t = TimeSpan.FromSeconds(post.VideoDuration);
+                                                string answer = string.Format("{0:D2}:{1:D2}", t.Minutes, t.Seconds);
+                                                if (t.Hours > 0) answer = string.Format("{0:D2}:{1:D2}:{2:D2}", t.Hours, t.Minutes, t.Seconds);
+                                                @answer
+                                            }
+                                            else
+                                            {
+                                                @:--:--
+                                            }
+                                        </span>
                                     }
                                 </div>
 
@@ -661,6 +698,13 @@
         formatDuration(seconds) {
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
+            const hours = Math.floor(mins / 60);
+
+            if(hours > 0) {
+                 const remainingMins = mins % 60;
+                 return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
     }

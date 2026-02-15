@@ -106,7 +106,15 @@ namespace Siphon.Services.LookupServices
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogError($"Kemono API Request Failed: {response.StatusCode}. Response: {jsonContent}");
-                    return new List<PostResult>();
+
+                    if (jsonContent.Contains("Not Found"))
+                    {
+                        return new List<PostResult>() { new PostResult { Id = "Not Found" } };
+                    }
+                    else
+                    {
+                        return new List<PostResult>();
+                    }
                 }
 
                 return ParsePosts(jsonContent, serviceType, searchUser);
