@@ -35,8 +35,10 @@
     <Folder Include="wwwroot\Approved\" />
     <Folder Include="wwwroot\Extra_Approved\" />
     <Folder Include="wwwroot\Lookups\" />
+    <Folder Include="wwwroot\ExternalIntegrationCache\" />
     <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
+    <Folder Include="wwwroot\VideoThumbnailsCache\" />
   </ItemGroup>
 
 </Project>
