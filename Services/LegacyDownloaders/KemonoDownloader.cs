@@ -104,7 +104,10 @@ namespace Siphon.Services.LegacyDownloaders
             {
                 string path = mainFile["path"].ToString();
                 string name = mainFile["name"]?.ToString();
-                if (IsVideo(path)) videosToDownload.Add((path, name));
+                if (IsVideo(path))
+                {
+                    videosToDownload.Add((path, name));
+                }
             }
 
             var attachments = rootNode["attachments"]?.AsArray();
@@ -141,6 +144,11 @@ namespace Siphon.Services.LegacyDownloaders
 
                 string downloadUrl = video.Path.StartsWith("http") ? video.Path : $"{downloadBase}{video.Path}";
 
+                if (video.Name.Contains(".gif"))
+                {
+                    continue;
+                }
+
                 string rawFileName = video.Name;
 
                 // Fallback to ?f= parameter
@@ -157,6 +165,10 @@ namespace Siphon.Services.LegacyDownloaders
                 }
 
                 string ext = Path.GetExtension(rawFileName);
+                if (ext == "gif")
+                {
+                    continue;
+                }
                 if (string.IsNullOrEmpty(ext)) ext = ".mp4";
 
                 string nameWithoutExt = Path.GetFileName(rawFileName);

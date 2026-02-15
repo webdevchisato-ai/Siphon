@@ -150,6 +150,11 @@ namespace Siphon.Services.LegacyDownloaders
                 // 1. Construct Full URL
                 string downloadUrl = video.Path.StartsWith("http") ? video.Path : $"{downloadBase}{video.Path}";
 
+                if (video.Name.Contains(".gif"))
+                {
+                    continue;
+                }
+
                 // 2. Determine Best Filename
                 string rawFileName = video.Name;
 
@@ -169,6 +174,10 @@ namespace Siphon.Services.LegacyDownloaders
                 // 3. Sanitize
                 // Remove extension for the "Job Name" (UI) but keep it for the file system
                 string ext = Path.GetExtension(rawFileName);
+                if (ext == "gif")
+                {
+                    continue;
+                }
                 if (string.IsNullOrEmpty(ext)) ext = ".mp4"; // Default safety
 
                 string nameWithoutExt = Path.GetFileNameWithoutExtension(rawFileName);
