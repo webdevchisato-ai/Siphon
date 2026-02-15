@@ -44,6 +44,13 @@ namespace Siphon.Pages
 
             var filePath = Path.Combine(uploadsFolder, UploadFile.FileName);
 
+            if (System.IO.File.Exists(filePath))
+            {
+                int currentPendingFileCount = new DirectoryInfo(uploadsFolder).GetFiles().Count();
+                _logger.LogWarning($"File already exists: {filePath}. Appending: {currentPendingFileCount}.");
+                filePath = Path.Combine(uploadsFolder, $"{Path.GetFileNameWithoutExtension(UploadFile.FileName)}_{currentPendingFileCount}{Path.GetExtension(UploadFile.FileName)}");
+            }
+
             // 2. Save the file locally
             using (var fileStream = new FileStream(filePath, FileMode.Create))
             {
