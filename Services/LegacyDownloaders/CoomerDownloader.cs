@@ -172,12 +172,30 @@ namespace Siphon.Services.LegacyDownloaders
                 if (string.IsNullOrEmpty(ext)) ext = ".mp4"; // Default safety
 
                 string nameWithoutExt = Path.GetFileNameWithoutExtension(rawFileName);
-                string cleanName = SharedScraperLogic.SanitizeFileName(nameWithoutExt, _downloadPath);
 
-                // If multiple files, append index to avoid overwrites if names happen to be identical
                 if (total > 1 && videosToDownload.Count(v => v.Name == video.Name) > 1)
                 {
-                    cleanName = $"{cleanName}_{count}";
+                    nameWithoutExt = $"{nameWithoutExt}_{count}";
+                }
+
+                if (string.IsNullOrWhiteSpace(nameWithoutExt))
+                {
+                    nameWithoutExt = $"{_job.Url.Split('/').LastOrDefault()}";
+                }
+
+                string cleanName = SharedScraperLogic.SanitizeFileName(nameWithoutExt, _downloadPath);
+
+                //falback if name in post is not compatable with downloader as post id will be compatable at its an int
+                if (cleanName == "mp4" || cleanName == "mp4.mp4" || cleanName.ToLower() == "mp4".ToLower() || cleanName.ToLower() == "mp4.mp4".ToLower())
+                {
+                    if (count > 1)
+                    {
+                        cleanName = $"{_job.Url.Split('/').LastOrDefault()}_{count}";
+                    }
+                    else
+                    {
+                        cleanName = $"{_job.Url.Split('/').LastOrDefault()}";
+                    }
                 }
 
                 string finalFileName = $"{cleanName}{ext}";

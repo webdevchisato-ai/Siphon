@@ -24,7 +24,7 @@ namespace Siphon.Services
 
             if (File.Exists(Path.Combine(downloadPath, $"{n}.mp4")))
             {
-                cleanName += $"_{DateTime.Now.Ticks}";
+                cleanName = cleanName.Replace(".mp4", "") + $"_{DateTime.Now.Ticks}.mp4";
             }
 
             return string.IsNullOrWhiteSpace(cleanName) ? "Video_Download" : cleanName;
