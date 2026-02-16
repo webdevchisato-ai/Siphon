@@ -269,186 +269,44 @@
         </div>
 
         <div class="col-md-9 col-lg-10">
-            @if (Model.IsSearchTimeout)
-            {
-                string alertClass = "alert-warning";
-                switch (Model.timeOutType)
-                {
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.StandardTimeout:
-                        alertClass = "alert-warning";
-                        break;
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.EndOfPosts:
-                        alertClass = "alert-info";
-                        break;
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.NotFound:
-                        alertClass = "alert-info";
-                        break;
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.ApiIssue:
-                        alertClass = "alert-danger";
-                        break;
-                    default:
-                        alertClass = "alert-warning";
-                    break;
-                }
 
-                string alertIcon = "bi-exclamation-triangle-fill";
-                switch (Model.timeOutType)
-                {
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.StandardTimeout:
-                        alertIcon = "bi-exclamation-triangle-fill";
-                        break;
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.EndOfPosts:
-                        alertIcon = "bi-info-circle-fill";
-                        break;
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.NotFound:
-                        alertIcon = "bi-info-circle-fill";
-                        break;
-                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.ApiIssue:
-                        alertIcon = "bi-exclamation-octagon-fill";
-                        break;
-                    default:
-                        alertIcon = "bi-exclamation-triangle-fill";
-                    break;
-                }
-
-                <div class="alert @alertClass d-flex align-items-center mb-4" role="alert">
-                    <i class="bi @alertIcon flex-shrink-0 me-2 fs-4"></i>
-                    <div>
-                        @if (Model.TimeOutHeader == "")
-                        {
-                            <strong>Search Timeout Exceeded (3 mins)</strong>
-                        }
-                        else
-                        {
-                            <strong>@Model.TimeOutHeader</strong>
-                        }
-                        @if (Model.TimeOutMessage == "")
-                        {
-                            <div class="small">The search operation took too long. Partial results are displayed below. Some video durations or thumbnails might be missing.</div>
-                        }
-                        else
-                        {
-                            <div class="small">@Model.TimeOutMessage</div>
-                        }
-                    </div>
+            <div id="statusAlert" class="alert d-flex align-items-center mb-4" role="alert" style="display: none;">
+                <i id="statusIcon" class="bi flex-shrink-0 me-2 fs-4"></i>
+                <div>
+                    <strong id="statusHeader"></strong>
+                    <div class="small" id="statusMessage"></div>
                 </div>
-            }
+            </div>
 
-            @if (Model.Posts.Count == 0)
-            {
-                <div class="text-center py-5">
-                    @if (!Model.SearchTriggered)
-                    {
+            <div id="resultsContainer">
+                @if (Model.SearchTriggered)
+                {
+                    <div class="text-center py-5">
+                        <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+                        <p class="mt-3 text-muted">Starting search stream...</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="text-center py-5">
                         <div class="mb-3"><i class="bi bi-search text-secondary" style="font-size: 4rem;"></i></div>
                         <h4 class="fw-bold text-muted">Discovery Mode</h4>
                         <p class="text-muted">Select a site and apply filters to start browsing.</p>
-                    }
-                    else
-                    {
-                        <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-                        <p class="mt-3 text-muted">Fetching feed or no results found...</p>
-                    }
-                </div>
-            }
-            else
-            {
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h4 class="fw-bold">
-                        @if (!string.IsNullOrEmpty(Model.SearchUser) && Model.ServiceType != "all")
-                        {
-                            <span>User Feed: @Model.SearchUser (@Model.ServiceType)</span>
-                        }
-                        else if (!string.IsNullOrEmpty(Model.SearchUser))
-                        {
-                            <span>Results for '@Model.SearchUser'</span>
-                        }
-                        else
-                        {
-                            <span>Global Feed</span>
-                        }
-                    </h4>
-                    <span class="badge bg-secondary">@Model.Posts.Count items shown</span>
-                </div>
+                    </div>
+                }
+            </div>
 
-                <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
-                    @foreach (var post in Model.Posts)
-                    {
-                        <div class="col">
-                            <div class="card h-100 shadow-sm border-0 post-card"
-                                 oncontextmenu="showContextMenu(event, '@post.OriginalUrl', this)">
-                                <div class="position-relative bg-black rounded-top overflow-hidden" style="height: 180px;">
+            <div class="d-flex justify-content-center my-5 gap-2" id="paginationControls" style="display: none;">
+                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true"
+                   class="btn btn-outline-dark px-4">
+                    <i class="bi bi-arrow-left"></i> Previous
+                </a>
 
-                                    <div class="queued-badge">
-                                        <i class="bi bi-check-circle-fill fs-1 mb-2"></i>
-                                        <span class="fw-bold">Queued!</span>
-                                    </div>
-
-                                    @if (!string.IsNullOrEmpty(post.ThumbnailUrl))
-                                    {
-                                        <img data-src="?handler=ProxyImage&url=@System.Web.HttpUtility.UrlEncode(post.ThumbnailUrl)"
-                                             data-duration="@(post.HasVideo? post.ThumbnailUrl: "")"
-                                             class="lazy-image w-100 h-100 img-loading"
-                                             style="object-fit: cover;"
-                                             alt="Post Thumbnail" />
-                                    }
-                                    else
-                                    {
-                                        <div class="w-100 h-100 d-flex align-items-center justify-content-center text-secondary">
-                                            <i class="bi @(post.HasVideo ? "bi-play-circle-fill" : "bi-image") fs-1 text-white-50"></i>
-                                        </div>
-                                    }
-
-                                    @if (post.HasVideo)
-                                    {
-                                        <span class="position-absolute top-0 end-0 badge bg-danger m-2 shadow-sm">VIDEO</span>
-                                        <span class="duration-badge" data-duration-display style="display: @(post.VideoDuration > 0 ? "block" : "none");">
-                                            @if (post.VideoDuration > 0)
-                                            {
-                                                TimeSpan t = TimeSpan.FromSeconds(post.VideoDuration);
-                                                string answer = string.Format("{0:D2}:{1:D2}", t.Minutes, t.Seconds);
-                                                if (t.Hours > 0) answer = string.Format("{0:D2}:{1:D2}:{2:D2}", t.Hours, t.Minutes, t.Seconds);
-                                                @answer
-                                            }
-                                            else
-                                            {
-                                                @:--:--
-                                            }
-                                        </span>
-                                    }
-                                </div>
-
-                                <div class="card-body">
-                                    <small class="text-uppercase text-primary fw-bold" style="font-size: 0.7rem;">@post.Service</small>
-                                    <h6 class="card-title text-truncate fw-bold mb-1" title="@post.Title">@post.Title</h6>
-                                    <small class="text-muted d-block mb-2 text-truncate">@post.User</small>
-
-                                    <div class="d-flex justify-content-between align-items-center mt-auto">
-                                        <span class="badge bg-light text-dark border">
-                                            <i class="bi bi-paperclip"></i> @post.AttachmentCount
-                                        </span>
-                                        <small class="text-muted" style="font-size: 0.75rem;">@post.Published.ToShortDateString()</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    }
-                </div>
-
-                <div class="d-flex justify-content-center my-5 gap-2">
-                    @if (Model.Offset > 0)
-                    {
-                        <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true"
-                           class="btn btn-outline-dark px-4">
-                            <i class="bi bi-arrow-left"></i> Previous
-                        </a>
-                    }
-
-                    <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true"
-                       class="btn btn-dark px-4">
-                        Load More <i class="bi bi-arrow-right"></i>
-                    </a>
-                </div>
-            }
+                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true"
+                   class="btn btn-dark px-4">
+                    Load More <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
         </div>
     </div>
 </div>
@@ -460,6 +318,116 @@
 </div>
 
 <script>
+    // --- 1. STREAMING LOGIC (BUFFERED) ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const searchTriggered = @(Model.SearchTriggered.ToString().ToLower());
+        if (searchTriggered) {
+            initiateStream();
+        }
+    });
+
+    async function initiateStream() {
+        const statusAlert = document.getElementById('statusAlert');
+        const statusHeader = document.getElementById('statusHeader');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusIcon = document.getElementById('statusIcon');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const paginationControls = document.getElementById('paginationControls');
+
+        // Initial UI State
+        statusAlert.style.display = 'flex';
+        statusAlert.style.opacity = '1'; // Ensure opacity is reset
+        statusAlert.className = 'alert alert-info d-flex align-items-center mb-4';
+        statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-2 fs-4';
+        statusHeader.innerText = "Processing";
+        statusMessage.innerText = "Initializing connection...";
+
+        const params = new URLSearchParams(window.location.search);
+
+        try {
+            const response = await fetch(`?handler=StreamSearch&${params.toString()}`);
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                // Decode and append new chunk
+                buffer += decoder.decode(value, { stream: true });
+
+                // Split by SSE delimiter (double newline)
+                let parts = buffer.split('\n\n');
+
+                // Keep incomplete part in buffer
+                buffer = parts.pop();
+
+                for (const part of parts) {
+                    if (part.trim().startsWith('data: ')) {
+                         processMessage(part.trim(), statusAlert, statusHeader, statusMessage, statusIcon, resultsContainer, paginationControls);
+                    }
+                }
+            }
+        } catch (err) {
+            statusAlert.className = 'alert alert-danger';
+            statusMessage.innerText = "Connection failed: " + err.message;
+            console.error(err);
+        }
+    }
+
+    function processMessage(line, statusAlert, statusHeader, statusMessage, statusIcon, resultsContainer, paginationControls) {
+        try {
+            const jsonStr = line.replace('data: ', '');
+            const data = JSON.parse(jsonStr);
+
+            if (data.type === 'status') {
+                statusMessage.innerText = data.payload;
+            } else if (data.type === 'error') {
+                statusAlert.className = 'alert alert-danger d-flex align-items-center mb-4';
+                statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-2 fs-4';
+                statusHeader.innerText = "Error";
+                statusMessage.innerText = data.payload;
+            } else if (data.type === 'warning') {
+                statusAlert.className = 'alert alert-warning d-flex align-items-center mb-4';
+                statusIcon.className = 'bi bi-exclamation-circle-fill flex-shrink-0 me-2 fs-4';
+                statusHeader.innerText = "Warning";
+                statusMessage.innerText = data.payload;
+            } else if (data.type === 'result') {
+                resultsContainer.innerHTML = data.payload;
+                reinitLazyLoading();
+                paginationControls.style.display = 'flex';
+
+                // Show Success State
+                statusAlert.className = 'alert alert-success d-flex align-items-center mb-4';
+                statusIcon.className = 'bi bi-check-circle-fill flex-shrink-0 me-2 fs-4';
+                statusHeader.innerText = "Complete";
+                statusMessage.innerText = "Loaded successfully.";
+
+                // Fade out after 2 seconds
+                setTimeout(() => {
+                    statusAlert.style.transition = "opacity 0.5s ease";
+                    statusAlert.style.opacity = "0";
+                    setTimeout(() => {
+                        statusAlert.style.display = 'none';
+                    }, 500);
+                }, 2000);
+            } else if (data.type === 'info') {
+                statusAlert.className = 'alert alert-info d-flex align-items-center mb-4';
+                statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-2 fs-4';
+                statusHeader.innerText = "Info";
+                statusMessage.innerText = data.payload;
+                // Optional: Auto-hide info messages if you want
+                // setTimeout(...)
+            }
+
+        } catch (e) {
+            console.error("Parse error:", e);
+        }
+    }
+
+    // --- 2. CONTEXT MENU LOGIC ---
     let activeUrl = "";
     let activeCard = null;
     const menu = document.getElementById('context-menu');
@@ -497,7 +465,6 @@
             alert('Error: Anti-Forgery Token not found on page.');
             return;
         }
-
         const token = tokenInput.value;
 
         try {
@@ -511,9 +478,7 @@
                     const badge = activeCard.querySelector('.queued-badge');
                     if (badge) {
                         badge.style.display = 'flex';
-                        setTimeout(() => {
-                            badge.style.display = 'none';
-                        }, 3000);
+                        setTimeout(() => { badge.style.display = 'none'; }, 3000);
                     }
                 }
             } else {
@@ -525,7 +490,7 @@
         }
     }
 
-    // ===== DYNAMIC SERVICE SWITCHING BASED ON SITE =====
+    // --- 3. FILTER & UI LOGIC ---
     const siteSelect = document.getElementById('siteSelect');
     const serviceSelect = document.getElementById('serviceSelect');
 
@@ -538,15 +503,12 @@
                 option.style.display = 'block';
                 return;
             }
-
             const optionSite = option.getAttribute('data-site');
             if (optionSite === selectedSite) {
                 option.style.display = 'block';
             } else {
                 option.style.display = 'none';
-                if (option.selected) {
-                    serviceSelect.value = 'all';
-                }
+                if (option.selected) serviceSelect.value = 'all';
             }
         });
     }
@@ -559,7 +521,7 @@
         updateServiceOptions();
     });
 
-    // ===== VIDEO LENGTH FILTER SLIDER =====
+    // --- 4. VIDEO SLIDER LOGIC ---
     const rangeMin = document.getElementById('rangeMin');
     const rangeMax = document.getElementById('rangeMax');
     const minVideoLength = document.getElementById('minVideoLength');
@@ -596,29 +558,21 @@
     }
 
     function smartStep(value) {
-        if (value < 60) return 5;           // 0-60s: 5s steps
-        if (value < 300) return 15;         // 1-5min: 15s steps
-        if (value < 600) return 30;         // 5-10min: 30s steps
-        if (value < 1800) return 60;        // 10-30min: 1min steps
-        if (value < 3600) return 120;       // 30min-1hr: 2min steps
-        return 300;                         // 1hr+: 5min steps
+        if (value < 60) return 5;
+        if (value < 300) return 15;
+        if (value < 600) return 30;
+        if (value < 1800) return 60;
+        if (value < 3600) return 120;
+        return 300;
     }
-
-    let lastMinValue = parseInt(rangeMin.value);
-    let lastMaxValue = parseInt(rangeMax.value);
 
     rangeMin.addEventListener('input', (e) => {
         let value = parseInt(e.target.value);
         const step = smartStep(value);
         value = Math.round(value / step) * step;
-
-        if (value > parseInt(rangeMax.value) - step) {
-            value = parseInt(rangeMax.value) - step;
-        }
-
+        if (value > parseInt(rangeMax.value) - step) value = parseInt(rangeMax.value) - step;
         rangeMin.value = value;
         minVideoLength.value = value;
-        lastMinValue = value;
         updateProgress();
     });
 
@@ -626,14 +580,9 @@
         let value = parseInt(e.target.value);
         const step = smartStep(value);
         value = Math.round(value / step) * step;
-
-        if (value < parseInt(rangeMin.value) + step) {
-            value = parseInt(rangeMin.value) + step;
-        }
-
+        if (value < parseInt(rangeMin.value) + step) value = parseInt(rangeMin.value) + step;
         rangeMax.value = value;
         maxVideoLength.value = value;
-        lastMaxValue = value;
         updateProgress();
     });
 
@@ -641,9 +590,7 @@
         let value = parseInt(e.target.value) || 0;
         if (value < 0) value = 0;
         if (value > 10000) value = 10000;
-        if (value >= parseInt(maxVideoLength.value)) {
-            value = parseInt(maxVideoLength.value) - 1;
-        }
+        if (value >= parseInt(maxVideoLength.value)) value = parseInt(maxVideoLength.value) - 1;
         rangeMin.value = value;
         minVideoLength.value = value;
         updateProgress();
@@ -653,26 +600,20 @@
         let value = parseInt(e.target.value) || 10000;
         if (value < 0) value = 0;
         if (value > 10000) value = 10000;
-        if (value <= parseInt(minVideoLength.value)) {
-            value = parseInt(minVideoLength.value) + 1;
-        }
+        if (value <= parseInt(minVideoLength.value)) value = parseInt(minVideoLength.value) + 1;
         rangeMax.value = value;
         maxVideoLength.value = value;
         updateProgress();
     });
 
     videoLengthToggle.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            videoLengthContent.classList.remove('filter-disabled');
-        } else {
-            videoLengthContent.classList.add('filter-disabled');
-        }
+        if (e.target.checked) videoLengthContent.classList.remove('filter-disabled');
+        else videoLengthContent.classList.add('filter-disabled');
     });
 
-    // Initialize
     updateProgress();
 
-    // ===== PARALLEL IMAGE LOADING WITH 20 CONCURRENT THREADS =====
+    // --- 5. PARALLEL IMAGE LOADER (20 Threads) ---
     class ParallelImageLoader {
         constructor(maxConcurrent = 20) {
             this.maxConcurrent = maxConcurrent;
@@ -739,12 +680,10 @@
             const mins = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
             const hours = Math.floor(mins / 60);
-
             if(hours > 0) {
                  const remainingMins = mins % 60;
                  return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
             }
-
             return `${mins}:${secs.toString().padStart(2, '0')}`;
         }
     }
@@ -769,8 +708,11 @@
         });
     }, observerOptions);
 
-    document.addEventListener('DOMContentLoaded', () => {
+    function reinitLazyLoading() {
         const lazyImages = document.querySelectorAll('.lazy-image');
         lazyImages.forEach(img => observer.observe(img));
-    });
+    }
+
+    // Initial call
+    reinitLazyLoading();
 </script>

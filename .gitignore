@@ -367,7 +367,7 @@ FodyWeavers.xsd
 wwwroot/Pending/
 wwwroot/Approved/
 wwwroot/Extra_Approved/
-wwwroot/Lookup/
+wwwroot/Lookups/
 wwwroot/VideoThumbnailsCache/
 wwwroot/ExternalIntegrationCache/
 wwwroot/PreviewImages/

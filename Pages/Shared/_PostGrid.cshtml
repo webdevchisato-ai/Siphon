@@ -1,0 +1,82 @@
+﻿@using Siphon.Pages
+@model List<ExternalIntegrationsModel.ExternalPost>
+
+@if (Model == null || Model.Count == 0)
+{
+    <div class="text-center py-5">
+        <div class="mb-3"><i class="bi bi-search text-secondary" style="font-size: 4rem;"></i></div>
+        <h4 class="fw-bold text-muted">No Results Found</h4>
+        <p class="text-muted">Try adjusting your filters.</p>
+    </div>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold">Results</h4>
+        <span class="badge bg-secondary">@Model.Count items shown</span>
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
+        @foreach (var post in Model)
+        {
+            <div class="col">
+                <div class="card h-100 shadow-sm border-0 post-card"
+                     oncontextmenu="showContextMenu(event, '@post.OriginalUrl', this)">
+                    <div class="position-relative bg-black rounded-top overflow-hidden" style="height: 180px;">
+
+                        <div class="queued-badge">
+                            <i class="bi bi-check-circle-fill fs-1 mb-2"></i>
+                            <span class="fw-bold">Queued!</span>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(post.ThumbnailUrl))
+                        {
+                            <img data-src="?handler=ProxyImage&url=@System.Web.HttpUtility.UrlEncode(post.ThumbnailUrl)"
+                                 data-duration="@(post.HasVideo? post.ThumbnailUrl: "")"
+                                 class="lazy-image w-100 h-100 img-loading"
+                                 style="object-fit: cover;"
+                                 alt="Post Thumbnail" />
+                        }
+                        else
+                        {
+                            <div class="w-100 h-100 d-flex align-items-center justify-content-center text-secondary">
+                                <i class="bi @(post.HasVideo ? "bi-play-circle-fill" : "bi-image") fs-1 text-white-50"></i>
+                            </div>
+                        }
+
+                        @if (post.HasVideo)
+                        {
+                            <span class="position-absolute top-0 end-0 badge bg-danger m-2 shadow-sm">VIDEO</span>
+                            <span class="duration-badge" data-duration-display style="display: @(post.VideoDuration > 0 ? "block" : "none");">
+                                @if (post.VideoDuration > 0)
+                                {
+                                    TimeSpan t = TimeSpan.FromSeconds(post.VideoDuration);
+                                    string answer = string.Format("{0:D2}:{1:D2}", t.Minutes, t.Seconds);
+                                    if (t.Hours > 0) answer = string.Format("{0:D2}:{1:D2}:{2:D2}", t.Hours, t.Minutes, t.Seconds);
+                                    @answer
+                                }
+                                else
+                                {
+                                    @:--:--
+                                }
+                            </span>
+                        }
+                    </div>
+
+                    <div class="card-body">
+                        <small class="text-uppercase text-primary fw-bold" style="font-size: 0.7rem;">@post.Service</small>
+                        <h6 class="card-title text-truncate fw-bold mb-1" title="@post.Title">@post.Title</h6>
+                        <small class="text-muted d-block mb-2 text-truncate">@post.User</small>
+
+                        <div class="d-flex justify-content-between align-items-center mt-auto">
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-paperclip"></i> @post.AttachmentCount
+                            </span>
+                            <small class="text-muted" style="font-size: 0.75rem;">@post.Published.ToShortDateString()</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

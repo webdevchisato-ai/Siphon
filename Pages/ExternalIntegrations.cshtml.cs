@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.ViewEngines;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Siphon.Services;
 using Siphon.Services.LookupServices;
 using System.Collections.Concurrent;
@@ -18,6 +21,8 @@ namespace Siphon.Pages
         private readonly ILogger<CoomerAPI> _coomerLogger;
         private readonly DownloadManager _downloadManager;
         private readonly IWebHostEnvironment _env;
+        private readonly ICompositeViewEngine _viewEngine;
+        private readonly ITempDataProvider _tempDataProvider;
         private readonly string _configPath;
         private string _kemonoSession = "";
         private string _coomerSession = "";
@@ -33,13 +38,17 @@ namespace Siphon.Pages
             ILogger<KemonoAPI> kemonoLogger,
             ILogger<CoomerAPI> coomerLogger,
             DownloadManager downloadManager,
-            IWebHostEnvironment environment)
+            IWebHostEnvironment environment,
+            ICompositeViewEngine viewEngine,
+            ITempDataProvider tempDataProvider)
         {
             _logger = logger;
             _kemonoLogger = kemonoLogger;
             _coomerLogger = coomerLogger;
             _downloadManager = downloadManager;
             _env = environment;
+            _viewEngine = viewEngine;
+            _tempDataProvider = tempDataProvider;
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
             LoadConfig();
         }
@@ -88,6 +97,9 @@ namespace Siphon.Pages
         [BindProperty]
         public TimeOutType timeOutType { get; set; }
 
+        [BindProperty]
+        public string foundFilesMessage { get; set; } = "";
+
         public enum TimeOutType
         {
             EndOfPosts,
@@ -110,10 +122,27 @@ namespace Siphon.Pages
             public double VideoDuration { get; set; } = 0; // Duration in seconds
         }
 
-        public async Task OnGetAsync()
+        public void OnGet()
         {
+            // Just initialize defaults. 
+        }
+
+        // --- NEW STREAMING HANDLER ---
+        public async Task<IActionResult> OnGetStreamSearchAsync()
+        {
+            Response.ContentType = "text/event-stream";
+
+            // Helper to write events
+            async Task SendEvent(string type, string payload)
+            {
+                var json = JsonSerializer.Serialize(new { type, payload });
+                await Response.WriteAsync($"data: {json}\n\n");
+                await Response.Body.FlushAsync();
+            }
+
             TimeOutHeader = "";
             TimeOutMessage = "";
+            foundFilesMessage = "";
 
             string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
             if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
@@ -131,6 +160,7 @@ namespace Siphon.Pages
             {
                 try
                 {
+                    await SendEvent("status", "Checking local cache...");
                     string json = await System.IO.File.ReadAllTextAsync(cachePath);
                     rawPosts = JsonSerializer.Deserialize<List<ExternalPost>>(json);
                     if (rawPosts != null) SearchTriggered = true;
@@ -141,7 +171,9 @@ namespace Siphon.Pages
             // Fetch from API if not cached
             if (rawPosts == null)
             {
-                if (!SearchTriggered) return;
+                if (!SearchTriggered) return new EmptyResult();
+
+                await SendEvent("status", "Contacting API...");
 
                 // --- TIMEOUT LOGIC START ---
                 var totalTimeout = TimeSpan.FromMinutes(3);
@@ -155,11 +187,13 @@ namespace Siphon.Pages
 
                 if (completedFetch != fetchTask)
                 {
-                    // Timed out during API fetch
+                    // CASE 1: API Connection Timed Out
                     IsSearchTimeout = true;
                     timeOutType = TimeOutType.StandardTimeout;
                     _logger.LogWarning("Search timed out during API fetch phase.");
-                    rawPosts = new List<ExternalPost>(); // Return empty if we couldn't even get the list
+
+                    await SendEvent("error", "Search timed out contacting API.");
+                    return new EmptyResult(); // EXIT HERE
                 }
                 else
                 {
@@ -170,18 +204,23 @@ namespace Siphon.Pages
                     {
                         if (rawPosts[0].Id.Contains("Not Found"))
                         {
+                            // CASE 2: User Not Found
                             IsSearchTimeout = true;
-                            TimeOutHeader = "Not Found";
-                            TimeOutMessage = "Posts from Listed User Not Found. Please try again later or try a different user.";
                             timeOutType = TimeOutType.NotFound;
-                            rawPosts = new List<ExternalPost>();
+
+                            // Send Warning and EXIT
+                            await SendEvent("warning", "User not found. Please check the ID and Service.");
+                            return new EmptyResult(); // EXIT HERE
                         }
                         else if (rawPosts[0].Id.Contains("End Of Posts"))
                         {
+                            // CASE 3: End of Posts
                             timeOutType = TimeOutType.EndOfPosts;
                             IsSearchTimeout = true;
-                            TimeOutHeader = "End Of Posts";
-                            TimeOutMessage = "Reached the end of available posts for this user/service";
+
+                            // Send Info and EXIT
+                            await SendEvent("warning", "Reached the end of available posts.");
+                            return new EmptyResult(); // EXIT HERE
                         }
 
                         if (rawPosts != null && rawPosts.Count > 0)
@@ -192,31 +231,29 @@ namespace Siphon.Pages
 
                             if (remaining > TimeSpan.Zero)
                             {
+                                // Notify user via stream
+                                await SendEvent("status", $"Found {rawPosts.Count} raw posts. Enriching metadata...");
+
                                 // 2. Enrichment Task
-                                // We create the enrichment task but don't await it directly
-                                var enrichTask = EnrichWithVideoDurations(rawPosts);
+                                var enrichTask = EnrichWithVideoDurations(rawPosts, (msg) => SendEvent("status", msg));
 
                                 // Wait for Enrichment OR Remaining Timeout
                                 var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining));
 
                                 if (completedEnrich != enrichTask)
                                 {
-                                    // Timed out during enrichment
+                                    // CASE 4: Enrichment Timeout (We allow partial results, so we don't exit, just warn)
                                     IsSearchTimeout = true;
                                     _logger.LogWarning("Search timed out during Video Enrichment phase.");
-                                    // We proceed with rawPosts. Some might have durations, some might not.
+                                    await SendEvent("warning", "Timeout during enrichment. Some metadata may be missing.");
                                 }
-
-                                // If enrichment finished in time, we are good.
-                                // If it timed out, we just move on. The rawPosts objects are updated by reference 
-                                // as the background tasks complete, so we just display what we have at this moment.
                             }
                             else
                             {
                                 IsSearchTimeout = true;
                             }
 
-                            // Update cache only if we didn't timeout (to avoid caching partial data)
+                            // Update cache only if we didn't timeout
                             if (!IsSearchTimeout)
                             {
                                 string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
@@ -226,22 +263,26 @@ namespace Siphon.Pages
                     }
                     else
                     {
+                        // CASE 5: Empty API Result (Unknown Error)
                         IsSearchTimeout = true;
-                        TimeOutHeader = "API Returned unknown or empty data";
-                        TimeOutMessage = "This could potentially be an API issue or an issue with the search properties, please review the search feilds, and check the apis are accessable";
                         timeOutType = TimeOutType.ApiIssue;
+
+                        await SendEvent("error", "API returned unknown or empty data.");
+                        return new EmptyResult(); // EXIT HERE
                     }
                 }
                 // --- TIMEOUT LOGIC END ---
             }
             else
             {
+                await SendEvent("status", $"Found {rawPosts.Count} Cached Posts. Processing...");
+
                 // Even if cached, check if we need to enrich posts that don't have duration yet
                 var postsNeedingDuration = rawPosts.Where(p => p.HasVideo && p.VideoDuration == 0).ToList();
                 if (postsNeedingDuration.Any())
                 {
-                    // We apply a smaller timeout here for cached items to keep UI snappy, or use the full 3 mins
-                    var enrichTask = EnrichWithVideoDurations(postsNeedingDuration);
+                    await SendEvent("status", $"Enriching {postsNeedingDuration.Count} cached video items...");
+                    var enrichTask = EnrichWithVideoDurations(postsNeedingDuration, (msg) => SendEvent("status", msg));
                     var completed = await Task.WhenAny(enrichTask, Task.Delay(TimeSpan.FromMinutes(3)));
 
                     if (completed != enrichTask) IsSearchTimeout = true;
@@ -255,27 +296,66 @@ namespace Siphon.Pages
                 }
             }
 
-            if (rawPosts == null) return;
+            if (rawPosts == null) rawPosts = new List<ExternalPost>();
 
             // Apply filters
             var filtered = rawPosts.AsEnumerable();
             if (OnlyVideos) filtered = filtered.Where(p => p.HasVideo);
             if (MinAttachments > 0) filtered = filtered.Where(p => p.AttachmentCount >= MinAttachments);
 
-            // Apply video length filter if enabled
             if (EnableVideoLengthFilter)
             {
                 filtered = filtered.Where(p =>
-                    !p.HasVideo || // Include non-videos
+                    !p.HasVideo ||
                     (p.VideoDuration >= MinVideoLength && p.VideoDuration <= MaxVideoLength)
                 );
             }
 
             Posts = filtered.ToList();
+
+            await SendEvent("status", "Rendering results...");
+
+            // Render Partial View to String
+            string html = await RenderPartialToStringAsync("_PostGrid", Posts);
+
+            // Send final HTML
+            await SendEvent("result", html);
+
+            // FIX: Prevent further rendering by the framework
+            return new EmptyResult();
+        }
+
+        // Helper to render Partial View to String
+        private async Task<string> RenderPartialToStringAsync(string viewName, object model)
+        {
+            var actionContext = new ActionContext(HttpContext, RouteData, PageContext.ActionDescriptor);
+
+            using (var sw = new StringWriter())
+            {
+                var viewResult = _viewEngine.FindView(actionContext, viewName, false);
+                if (viewResult.View == null) return string.Empty;
+
+                var viewDictionary = new ViewDataDictionary(new Microsoft.AspNetCore.Mvc.ModelBinding.EmptyModelMetadataProvider(), new Microsoft.AspNetCore.Mvc.ModelBinding.ModelStateDictionary())
+                {
+                    Model = model
+                };
+
+                var viewContext = new ViewContext(
+                    actionContext,
+                    viewResult.View,
+                    viewDictionary,
+                    new TempDataDictionary(actionContext.HttpContext, _tempDataProvider),
+                    sw,
+                    new HtmlHelperOptions()
+                );
+
+                await viewResult.View.RenderAsync(viewContext);
+                return sw.ToString();
+            }
         }
 
         // --- ENRICH POSTS WITH VIDEO DURATIONS ---
-        private async Task EnrichWithVideoDurations(List<ExternalPost> posts)
+        private async Task EnrichWithVideoDurations(List<ExternalPost> posts, Func<string, Task> progressCallback = null)
         {
             var videoPosts = posts.Where(p => p.HasVideo && !string.IsNullOrEmpty(p.ThumbnailUrl)).ToList();
 
@@ -283,28 +363,40 @@ namespace Siphon.Pages
 
             _logger.LogInformation($"Enriching {videoPosts.Count} video posts with duration data...");
 
+            if (progressCallback != null)
+                await progressCallback($"Found {videoPosts.Count} posts with videos. Processing...");
+
+            int total = videoPosts.Count;
+            int processed = 0;
+
             var tasks = videoPosts.Select(async post =>
             {
                 try
                 {
                     string videoUrl = post.ThumbnailUrl;
 
-                    // Check if already cached in memory
                     if (_durationCache.TryGetValue(videoUrl, out double cachedDuration))
                     {
                         post.VideoDuration = cachedDuration;
-                        return;
+                    }
+                    else
+                    {
+                        string domain = videoUrl.Contains("kemono") ? "kemono.cr" : "coomer.st";
+                        string cookie = videoUrl.Contains("kemono") ? _kemonoSession : _coomerSession;
+                        string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
+
+                        double duration = await GetVideoDuration(videoUrl, headers);
+                        post.VideoDuration = duration;
+                        _durationCache.TryAdd(videoUrl, duration);
                     }
 
-                    string domain = videoUrl.Contains("kemono") ? "kemono.cr" : "coomer.st";
-                    string cookie = videoUrl.Contains("kemono") ? _kemonoSession : _coomerSession;
-                    string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
-
-                    double duration = await GetVideoDuration(videoUrl, headers);
-                    post.VideoDuration = duration;
-
-                    // Cache it
-                    _durationCache.TryAdd(videoUrl, duration);
+                    Interlocked.Increment(ref processed);
+                    // Optional: Send granular updates every 5 items to avoid flooding the stream
+                    if (processed % 5 == 0 && progressCallback != null)
+                    {
+                        // Fire and forget the status update to not block
+                        _ = progressCallback($"Processed video {processed}/{total}...");
+                    }
                 }
                 catch (Exception ex)
                 {
