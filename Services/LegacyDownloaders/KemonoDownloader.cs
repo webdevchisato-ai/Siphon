@@ -218,7 +218,7 @@ namespace Siphon.Services.LegacyDownloaders
                     {
                         _logger.LogInformation($"Converting {finalFileName} to MP4 format...");
                         // This handles the conversion and deletes the old file
-                        string newPath = await SharedScraperLogic.ConvertToMp4Async(fullFilePath, _job, token);
+                        string newPath = await SharedScraperLogic.ConvertToMp4Async(fullFilePath, _job, token, _env);
                         _job.FinalFilePath = newPath;
                     }
                 }

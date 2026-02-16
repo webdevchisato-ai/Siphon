@@ -1,6 +1,8 @@
 ﻿using System.Diagnostics;
 using System.Net;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Siphon.Extensions;
 
 namespace Siphon.Services
 {
@@ -110,11 +112,18 @@ namespace Siphon.Services
             File.Move(tempPath, path);
         }
 
-        public static async Task<string> ConvertToMp4Async(string inputPath, DownloadJob job, CancellationToken token)
+        public static async Task<string> ConvertToMp4Async(string inputPath, DownloadJob job, CancellationToken token, IWebHostEnvironment _env)
         {
+            FileInfo originalFile = new FileInfo(inputPath);
+            originalFile.Rename($"{Path.GetFileNameWithoutExtension(inputPath)}.{Path.GetExtension(inputPath)}.converting");
+
             string directory = Path.GetDirectoryName(inputPath);
             string fileNameNoExt = Path.GetFileNameWithoutExtension(inputPath);
-            string outputPath = Path.Combine(directory, $"{fileNameNoExt}.mp4");
+            string finalOutputPath = Path.Combine(directory, $"{fileNameNoExt}.mp4");
+
+            string convertOutputPath = Path.Combine(_env.WebRootPath, "Convert", $"{fileNameNoExt}.mp4");
+
+            string editingPath = originalFile.FullName;
 
             // Safety check: Don't convert if it's already mp4 (should be handled by caller, but safe to check)
             if (string.Equals(Path.GetExtension(inputPath), ".mp4", StringComparison.OrdinalIgnoreCase))
@@ -130,7 +139,7 @@ namespace Siphon.Services
             // -c:v libx264: Use H.264 video codec
             // -c:a aac: Use AAC audio codec
             // -movflags +faststart: Move metadata to start of file (good for web playback)
-            string args = $"-y -i \"{inputPath}\" -c:v libx264 -c:a aac -movflags +faststart \"{outputPath}\"";
+            string args = $"-y -i \"{editingPath}\" -c:v libx264 -c:a aac -movflags +faststart \"{convertOutputPath}\"";
 
             var startInfo = new ProcessStartInfo
             {
@@ -153,8 +162,18 @@ namespace Siphon.Services
             if (process.ExitCode == 0)
             {
                 // Conversion success: Delete the original non-mp4 file
-                try { if (File.Exists(inputPath)) File.Delete(inputPath); } catch { }
-                return outputPath;
+                try { if (File.Exists(editingPath)) File.Delete(editingPath); } catch { }
+                try
+                {
+                    FileInfo outputFile = new FileInfo(convertOutputPath);
+                    outputFile.Move(directory);
+                    if (outputFile.FullName != finalOutputPath)
+                    {
+                        throw new Exception("Failed to move converted file to final location.");
+                    }
+                }
+                catch { }
+                return finalOutputPath;
             }
             else
             {
