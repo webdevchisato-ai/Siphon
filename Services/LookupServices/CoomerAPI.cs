@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 
 namespace Siphon.Services.LookupServices
 {
@@ -106,10 +107,16 @@ namespace Siphon.Services.LookupServices
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.LogError($"Coomer API Request Failed: {response.StatusCode}. Response: {jsonContent}");
-                    
+
+                    string offsetErrorPattern = @"Offset \d+ is bigger than total count \d+";
+
                     if (jsonContent.Contains("Not Found"))
                     {
                         return new List<PostResult>() { new PostResult { Id = "Not Found" } };
+                    }
+                    else if (Regex.IsMatch(jsonContent, offsetErrorPattern, RegexOptions.IgnoreCase))
+                    {
+                        return new List<PostResult>() { new PostResult { Id = "End Of Posts" } };
                     }
                     else
                     {

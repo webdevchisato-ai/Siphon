@@ -85,6 +85,17 @@ namespace Siphon.Pages
         [BindProperty]
         public string TimeOutHeader { get; set; } = "";
 
+        [BindProperty]
+        public TimeOutType timeOutType { get; set; }
+
+        public enum TimeOutType
+        {
+            EndOfPosts,
+            NotFound,
+            ApiIssue,
+            StandardTimeout,
+        }
+
         public class ExternalPost
         {
             public string Id { get; set; }
@@ -146,6 +157,7 @@ namespace Siphon.Pages
                 {
                     // Timed out during API fetch
                     IsSearchTimeout = true;
+                    timeOutType = TimeOutType.StandardTimeout;
                     _logger.LogWarning("Search timed out during API fetch phase.");
                     rawPosts = new List<ExternalPost>(); // Return empty if we couldn't even get the list
                 }
@@ -161,6 +173,15 @@ namespace Siphon.Pages
                             IsSearchTimeout = true;
                             TimeOutHeader = "Not Found";
                             TimeOutMessage = "Posts from Listed User Not Found. Please try again later or try a different user.";
+                            timeOutType = TimeOutType.NotFound;
+                            rawPosts = new List<ExternalPost>();
+                        }
+                        else if (rawPosts[0].Id.Contains("End Of Posts"))
+                        {
+                            timeOutType = TimeOutType.EndOfPosts;
+                            IsSearchTimeout = true;
+                            TimeOutHeader = "End Of Posts";
+                            TimeOutMessage = "Reached the end of available posts for this user/service";
                         }
 
                         if (rawPosts != null && rawPosts.Count > 0)
@@ -208,6 +229,7 @@ namespace Siphon.Pages
                         IsSearchTimeout = true;
                         TimeOutHeader = "API Returned unknown or empty data";
                         TimeOutMessage = "This could potentially be an API issue or an issue with the search properties, please review the search feilds, and check the apis are accessable";
+                        timeOutType = TimeOutType.ApiIssue;
                     }
                 }
                 // --- TIMEOUT LOGIC END ---

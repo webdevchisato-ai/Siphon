@@ -271,8 +271,48 @@
         <div class="col-md-9 col-lg-10">
             @if (Model.IsSearchTimeout)
             {
-                <div class="alert alert-warning d-flex align-items-center mb-4" role="alert">
-                    <i class="bi bi-exclamation-triangle-fill flex-shrink-0 me-2 fs-4"></i>
+                string alertClass = "alert-warning";
+                switch (Model.timeOutType)
+                {
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.StandardTimeout:
+                        alertClass = "alert-warning";
+                        break;
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.EndOfPosts:
+                        alertClass = "alert-info";
+                        break;
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.NotFound:
+                        alertClass = "alert-info";
+                        break;
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.ApiIssue:
+                        alertClass = "alert-danger";
+                        break;
+                    default:
+                        alertClass = "alert-warning";
+                    break;
+                }
+
+                string alertIcon = "bi-exclamation-triangle-fill";
+                switch (Model.timeOutType)
+                {
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.StandardTimeout:
+                        alertIcon = "bi-exclamation-triangle-fill";
+                        break;
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.EndOfPosts:
+                        alertIcon = "bi-info-circle-fill";
+                        break;
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.NotFound:
+                        alertIcon = "bi-info-circle-fill";
+                        break;
+                    case Siphon.Pages.ExternalIntegrationsModel.TimeOutType.ApiIssue:
+                        alertIcon = "bi-exclamation-octagon-fill";
+                        break;
+                    default:
+                        alertIcon = "bi-exclamation-triangle-fill";
+                    break;
+                }
+
+                <div class="alert @alertClass d-flex align-items-center mb-4" role="alert">
+                    <i class="bi @alertIcon flex-shrink-0 me-2 fs-4"></i>
                     <div>
                         @if (Model.TimeOutHeader == "")
                         {
