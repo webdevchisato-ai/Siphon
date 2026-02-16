@@ -373,3 +373,4 @@ wwwroot/ExternalIntegrationCache/
 wwwroot/PreviewImages/
 wwwroot/Convert/
 Config
+/wwwroot/Lookups/PendingFileURLs.json
