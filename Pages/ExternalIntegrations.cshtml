@@ -303,7 +303,7 @@
                 </a>
 
                 <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true"
-                   class="btn btn-dark px-4">
+                   class="btn btn-dark px-4" id="btnLoadMore">
                     Load More <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
@@ -384,6 +384,10 @@
 
             if (data.type === 'status') {
                 statusMessage.innerText = data.payload;
+            } else if (data.type === 'metaOffset') {
+                // HANDLE DYNAMIC OFFSET UPDATE
+                const meta = JSON.parse(data.payload);
+                updatePaginationLinks(meta.nextOffset);
             } else if (data.type === 'error') {
                 statusAlert.className = 'alert alert-danger d-flex align-items-center mb-4';
                 statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-2 fs-4';
@@ -418,12 +422,20 @@
                 statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-2 fs-4';
                 statusHeader.innerText = "Info";
                 statusMessage.innerText = data.payload;
-                // Optional: Auto-hide info messages if you want
-                // setTimeout(...)
             }
 
         } catch (e) {
             console.error("Parse error:", e);
+        }
+    }
+
+    // Helper to update the Load More button href
+    function updatePaginationLinks(newNextOffset) {
+        const btnMore = document.getElementById('btnLoadMore');
+        if (btnMore) {
+            const url = new URL(btnMore.href);
+            url.searchParams.set("Offset", newNextOffset);
+            btnMore.href = url.toString();
         }
     }
 

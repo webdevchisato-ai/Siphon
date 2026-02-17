@@ -127,7 +127,6 @@ namespace Siphon.Pages
             // Just initialize defaults. 
         }
 
-        // --- NEW STREAMING HANDLER ---
         public async Task<IActionResult> OnGetStreamSearchAsync()
         {
             Response.ContentType = "text/event-stream";
@@ -144,174 +143,220 @@ namespace Siphon.Pages
             TimeOutMessage = "";
             foundFilesMessage = "";
 
-            string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
-            if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
+            // --- SAFETY SETTINGS ---
+            int retryCount = 0;
+            int maxRetries = 20; // Prevent infinite loops. Stop after checking 20 pages (1000 posts).
+            bool keepSearching = true;
 
-            string scope = string.IsNullOrWhiteSpace(SearchUser) ? "Global" : $"User_{SearchUser}";
-            if (ServiceType != "all") scope += $"_{ServiceType}";
-
-            string cacheFileName = $"Feed_{Site}_{scope}_Offset{Offset}.json";
-            string cachePath = Path.Combine(cacheFolder, cacheFileName);
-
-            List<ExternalPost> rawPosts = null;
-
-            // Try to load from cache
-            if (System.IO.File.Exists(cachePath) && System.IO.File.GetLastWriteTime(cachePath) > DateTime.Now.AddDays(-1))
+            // We use a loop to handle the "OnlyVideos" retry logic
+            while (keepSearching)
             {
-                try
+                string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
+                if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
+
+                string scope = string.IsNullOrWhiteSpace(SearchUser) ? "Global" : $"User_{SearchUser}";
+                if (ServiceType != "all") scope += $"_{ServiceType}";
+
+                // Note: Offset is part of the filename, so this updates every loop iteration
+                string cacheFileName = $"Feed_{Site}_{scope}_Offset{Offset}.json";
+                string cachePath = Path.Combine(cacheFolder, cacheFileName);
+
+                List<ExternalPost> rawPosts = null;
+
+                // Try to load from cache
+                if (System.IO.File.Exists(cachePath) && System.IO.File.GetLastWriteTime(cachePath) > DateTime.Now.AddDays(-1))
                 {
-                    await SendEvent("status", "Checking local cache...");
-                    string json = await System.IO.File.ReadAllTextAsync(cachePath);
-                    rawPosts = JsonSerializer.Deserialize<List<ExternalPost>>(json);
-                    if (rawPosts != null) SearchTriggered = true;
-                }
-                catch { }
-            }
-
-            // Fetch from API if not cached
-            if (rawPosts == null)
-            {
-                if (!SearchTriggered) return new EmptyResult();
-
-                await SendEvent("status", "Contacting API...");
-
-                // --- TIMEOUT LOGIC START ---
-                var totalTimeout = TimeSpan.FromMinutes(3);
-                var stopwatch = Stopwatch.StartNew();
-
-                // 1. Fetch Data Task
-                var fetchTask = FetchFromApi(Site, SearchUser, Offset);
-
-                // Wait for Fetch OR Timeout
-                var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
-
-                if (completedFetch != fetchTask)
-                {
-                    // CASE 1: API Connection Timed Out
-                    IsSearchTimeout = true;
-                    timeOutType = TimeOutType.StandardTimeout;
-                    _logger.LogWarning("Search timed out during API fetch phase.");
-
-                    await SendEvent("error", "Search timed out contacting API.");
-                    return new EmptyResult(); // EXIT HERE
-                }
-                else
-                {
-                    // Fetch completed successfully
-                    rawPosts = await fetchTask;
-
-                    if (rawPosts.Count() > 0)
+                    try
                     {
-                        if (rawPosts[0].Id.Contains("Not Found"))
-                        {
-                            // CASE 2: User Not Found
-                            IsSearchTimeout = true;
-                            timeOutType = TimeOutType.NotFound;
+                        await SendEvent("status", $"Checking local cache (Offset {Offset})...");
+                        string json = await System.IO.File.ReadAllTextAsync(cachePath);
+                        rawPosts = JsonSerializer.Deserialize<List<ExternalPost>>(json);
+                        if (rawPosts != null) SearchTriggered = true;
+                    }
+                    catch { }
+                }
 
-                            // Send Warning and EXIT
-                            await SendEvent("warning", "User not found. Please check the ID and Service.");
-                            return new EmptyResult(); // EXIT HERE
-                        }
-                        else if (rawPosts[0].Id.Contains("End Of Posts"))
-                        {
-                            // CASE 3: End of Posts
-                            timeOutType = TimeOutType.EndOfPosts;
-                            IsSearchTimeout = true;
+                // Fetch from API if not cached
+                if (rawPosts == null)
+                {
+                    if (!SearchTriggered) return new EmptyResult();
 
-                            // Send Info and EXIT
-                            await SendEvent("warning", "Reached the end of available posts.");
-                            return new EmptyResult(); // EXIT HERE
-                        }
+                    await SendEvent("status", $"Contacting API (Offset {Offset})...");
 
-                        if (rawPosts != null && rawPosts.Count > 0)
-                        {
-                            // Calculate remaining time for enrichment
-                            var elapsed = stopwatch.Elapsed;
-                            var remaining = totalTimeout - elapsed;
+                    // --- TIMEOUT LOGIC START ---
+                    var totalTimeout = TimeSpan.FromMinutes(3);
+                    var stopwatch = Stopwatch.StartNew();
 
-                            if (remaining > TimeSpan.Zero)
-                            {
-                                // Notify user via stream
-                                await SendEvent("status", $"Found {rawPosts.Count} raw posts. Enriching metadata...");
+                    // 1. Fetch Data Task
+                    var fetchTask = FetchFromApi(Site, SearchUser, Offset);
 
-                                // 2. Enrichment Task
-                                var enrichTask = EnrichWithVideoDurations(rawPosts, (msg) => SendEvent("status", msg));
+                    // Wait for Fetch OR Timeout
+                    var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
 
-                                // Wait for Enrichment OR Remaining Timeout
-                                var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining));
+                    if (completedFetch != fetchTask)
+                    {
+                        // CASE 1: API Connection Timed Out
+                        IsSearchTimeout = true;
+                        timeOutType = TimeOutType.StandardTimeout;
+                        _logger.LogWarning("Search timed out during API fetch phase.");
 
-                                if (completedEnrich != enrichTask)
-                                {
-                                    // CASE 4: Enrichment Timeout (We allow partial results, so we don't exit, just warn)
-                                    IsSearchTimeout = true;
-                                    _logger.LogWarning("Search timed out during Video Enrichment phase.");
-                                    await SendEvent("warning", "Timeout during enrichment. Some metadata may be missing.");
-                                }
-                            }
-                            else
-                            {
-                                IsSearchTimeout = true;
-                            }
-
-                            // Update cache only if we didn't timeout
-                            if (!IsSearchTimeout)
-                            {
-                                string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
-                                await System.IO.File.WriteAllTextAsync(cachePath, json);
-                            }
-                        }
+                        await SendEvent("error", "Search timed out contacting API.");
+                        return new EmptyResult(); // EXIT HERE
                     }
                     else
                     {
-                        // CASE 5: Empty API Result (Unknown Error)
-                        IsSearchTimeout = true;
-                        timeOutType = TimeOutType.ApiIssue;
+                        // Fetch completed successfully
+                        rawPosts = await fetchTask;
 
-                        await SendEvent("error", "API returned unknown or empty data.");
-                        return new EmptyResult(); // EXIT HERE
+                        if (rawPosts.Count() > 0)
+                        {
+                            if (rawPosts[0].Id.Contains("Not Found"))
+                            {
+                                // CASE 2: User Not Found
+                                IsSearchTimeout = true;
+                                timeOutType = TimeOutType.NotFound;
+
+                                // Send Warning and EXIT
+                                await SendEvent("warning", "User not found. Please check the ID and Service.");
+                                return new EmptyResult(); // EXIT HERE
+                            }
+                            else if (rawPosts[0].Id.Contains("End Of Posts"))
+                            {
+                                // CASE 3: End of Posts - WE MUST STOP LOOPING HERE
+                                timeOutType = TimeOutType.EndOfPosts;
+                                IsSearchTimeout = true;
+
+                                await SendEvent("warning", "Reached the end of available posts.");
+
+                                // If we were looking for videos and found none by the end, we still have to exit.
+                                return new EmptyResult(); // EXIT HERE
+                            }
+
+                            if (rawPosts != null && rawPosts.Count > 0)
+                            {
+                                // Calculate remaining time for enrichment
+                                var elapsed = stopwatch.Elapsed;
+                                var remaining = totalTimeout - elapsed;
+
+                                if (remaining > TimeSpan.Zero)
+                                {
+                                    // Notify user via stream
+                                    await SendEvent("status", $"Found {rawPosts.Count} raw posts. Enriching metadata...");
+
+                                    // 2. Enrichment Task
+                                    var enrichTask = EnrichWithVideoDurations(rawPosts, (msg) => SendEvent("status", msg));
+
+                                    // Wait for Enrichment OR Remaining Timeout
+                                    var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining));
+
+                                    if (completedEnrich != enrichTask)
+                                    {
+                                        // CASE 4: Enrichment Timeout (We allow partial results, so we don't exit, just warn)
+                                        IsSearchTimeout = true;
+                                        _logger.LogWarning("Search timed out during Video Enrichment phase.");
+                                        await SendEvent("warning", "Timeout during enrichment. Some metadata may be missing.");
+                                    }
+                                }
+                                else
+                                {
+                                    IsSearchTimeout = true;
+                                }
+
+                                // Update cache only if we didn't timeout
+                                if (!IsSearchTimeout)
+                                {
+                                    string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
+                                    await System.IO.File.WriteAllTextAsync(cachePath, json);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // CASE 5: Empty API Result (Unknown Error)
+                            IsSearchTimeout = true;
+                            timeOutType = TimeOutType.ApiIssue;
+
+                            await SendEvent("error", "API returned unknown or empty data.");
+                            return new EmptyResult(); // EXIT HERE
+                        }
                     }
+                    // --- TIMEOUT LOGIC END ---
                 }
-                // --- TIMEOUT LOGIC END ---
-            }
-            else
-            {
-                await SendEvent("status", $"Found {rawPosts.Count} Cached Posts. Processing...");
-
-                // Even if cached, check if we need to enrich posts that don't have duration yet
-                var postsNeedingDuration = rawPosts.Where(p => p.HasVideo && p.VideoDuration == 0).ToList();
-                if (postsNeedingDuration.Any())
+                else
                 {
-                    await SendEvent("status", $"Enriching {postsNeedingDuration.Count} cached video items...");
-                    var enrichTask = EnrichWithVideoDurations(postsNeedingDuration, (msg) => SendEvent("status", msg));
-                    var completed = await Task.WhenAny(enrichTask, Task.Delay(TimeSpan.FromMinutes(3)));
+                    await SendEvent("status", $"Found {rawPosts.Count} Cached Posts. Processing...");
 
-                    if (completed != enrichTask) IsSearchTimeout = true;
-
-                    // Update cache if fully successful
-                    if (!IsSearchTimeout)
+                    // Even if cached, check if we need to enrich posts that don't have duration yet
+                    var postsNeedingDuration = rawPosts.Where(p => p.HasVideo && p.VideoDuration == 0).ToList();
+                    if (postsNeedingDuration.Any())
                     {
-                        string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
-                        await System.IO.File.WriteAllTextAsync(cachePath, json);
+                        await SendEvent("status", $"Enriching {postsNeedingDuration.Count} cached video items...");
+                        var enrichTask = EnrichWithVideoDurations(postsNeedingDuration, (msg) => SendEvent("status", msg));
+                        var completed = await Task.WhenAny(enrichTask, Task.Delay(TimeSpan.FromMinutes(3)));
+
+                        if (completed != enrichTask) IsSearchTimeout = true;
+
+                        // Update cache if fully successful
+                        if (!IsSearchTimeout)
+                        {
+                            string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
+                            await System.IO.File.WriteAllTextAsync(cachePath, json);
+                        }
                     }
                 }
+
+                if (rawPosts == null) rawPosts = new List<ExternalPost>();
+
+                // Apply filters
+                var filtered = rawPosts.AsEnumerable();
+
+                if (OnlyVideos) filtered = filtered.Where(p => p.HasVideo);
+
+                // --- RETRY LOGIC START ---
+                bool shouldRetry = false;
+
+                if (OnlyVideos && filtered.Count() == 0)
+                {
+                    // We wanted videos, but this page has none. 
+                    // Increment offset and loop again.
+                    Offset += 50;
+                    retryCount++;
+
+                    if (retryCount < maxRetries)
+                    {
+                        shouldRetry = true;
+                        await SendEvent("status", $"Page contained no videos. Scanning next page (Attempt {retryCount}/{maxRetries})...");
+                    }
+                    else
+                    {
+                        await SendEvent("warning", $"Scanned {maxRetries} pages without finding a video. Stopping search.");
+                        return new EmptyResult();
+                    }
+                }
+
+                if (!shouldRetry)
+                {
+                    // We found results (or we aren't filtering strict videos), so we break the loop and render
+                    keepSearching = false;
+
+                    if (MinAttachments > 0) filtered = filtered.Where(p => p.AttachmentCount >= MinAttachments);
+
+                    if (EnableVideoLengthFilter)
+                    {
+                        filtered = filtered.Where(p =>
+                            !p.HasVideo ||
+                            (p.VideoDuration >= MinVideoLength && p.VideoDuration <= MaxVideoLength)
+                        );
+                    }
+
+                    Posts = filtered.ToList();
+                }
+                // --- RETRY LOGIC END ---
             }
 
-            if (rawPosts == null) rawPosts = new List<ExternalPost>();
-
-            // Apply filters
-            var filtered = rawPosts.AsEnumerable();
-            if (OnlyVideos) filtered = filtered.Where(p => p.HasVideo);
-            if (MinAttachments > 0) filtered = filtered.Where(p => p.AttachmentCount >= MinAttachments);
-
-            if (EnableVideoLengthFilter)
-            {
-                filtered = filtered.Where(p =>
-                    !p.HasVideo ||
-                    (p.VideoDuration >= MinVideoLength && p.VideoDuration <= MaxVideoLength)
-                );
-            }
-
-            Posts = filtered.ToList();
+            // --- CRITICAL FIX: Tell frontend the correct next offset ---
+            int correctNextOffset = Offset + 50;
+            await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = correctNextOffset }));
 
             await SendEvent("status", "Rendering results...");
 
