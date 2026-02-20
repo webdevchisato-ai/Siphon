@@ -11,6 +11,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Linq;
 
 namespace Siphon.Pages
 {
@@ -54,6 +55,19 @@ namespace Siphon.Pages
         }
 
         public List<ExternalPost> Posts { get; set; } = new();
+        public List<ExternalCreator> Creators { get; set; } = new();
+
+        [BindProperty(SupportsGet = true)]
+        public string ViewMode { get; set; } = "artists";
+
+        [BindProperty(SupportsGet = true)]
+        public string ArtistSortMode { get; set; } = "popularity"; // updated, popularity, indexed, alphabetical, service
+
+        [BindProperty(SupportsGet = true)]
+        public bool ReturnToArtists { get; set; } = false;
+
+        [BindProperty(SupportsGet = true)]
+        public int ArtistOffset { get; set; } = 0;
 
         [BindProperty(SupportsGet = true)]
         public string Site { get; set; } = "kemono.cr";
@@ -122,6 +136,18 @@ namespace Siphon.Pages
             public double VideoDuration { get; set; } = 0; // Duration in seconds
         }
 
+        public class ExternalCreator
+        {
+            public string Id { get; set; }
+            public string Name { get; set; }
+            public string Service { get; set; }
+            public string ProfileIconUrl { get; set; }
+            public DateTime Updated { get; set; }
+            public DateTime Indexed { get; set; }
+            public int Favorited { get; set; }
+            public string OriginalUrl { get; set; }
+        }
+
         public void OnGet()
         {
             // Just initialize defaults. 
@@ -143,27 +169,114 @@ namespace Siphon.Pages
             TimeOutMessage = "";
             foundFilesMessage = "";
 
-            // --- SAFETY SETTINGS ---
+            string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
+            if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
+
+            // --- ARTISTS LOOKUP MODE ---
+            if (ViewMode == "artists")
+            {
+                string cacheFileName = $"Feed_{Site}_Creators.json";
+                string cachePath = Path.Combine(cacheFolder, cacheFileName);
+                List<ExternalCreator> rawCreators = null;
+
+                if (System.IO.File.Exists(cachePath) && System.IO.File.GetLastWriteTime(cachePath) > DateTime.Now.AddDays(-1))
+                {
+                    try
+                    {
+                        await SendEvent("status", "Checking local cache for artists...");
+                        string json = await System.IO.File.ReadAllTextAsync(cachePath);
+                        rawCreators = JsonSerializer.Deserialize<List<ExternalCreator>>(json);
+                        if (rawCreators != null) SearchTriggered = true;
+                    }
+                    catch { }
+                }
+
+                if (rawCreators == null)
+                {
+                    if (!SearchTriggered) return new EmptyResult();
+                    await SendEvent("status", "Contacting API for artists list...");
+
+                    var totalTimeout = TimeSpan.FromMinutes(3);
+                    var fetchTask = FetchCreatorsFromApi(Site);
+                    var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
+
+                    if (completedFetch != fetchTask)
+                    {
+                        IsSearchTimeout = true;
+                        timeOutType = TimeOutType.StandardTimeout;
+                        _logger.LogWarning("Search timed out during API fetch phase.");
+                        await SendEvent("error", "Search timed out contacting API.");
+                        return new EmptyResult();
+                    }
+                    else
+                    {
+                        rawCreators = await fetchTask;
+                        if (rawCreators != null && rawCreators.Count > 0)
+                        {
+                            string json = JsonSerializer.Serialize(rawCreators, new JsonSerializerOptions { WriteIndented = true });
+                            await System.IO.File.WriteAllTextAsync(cachePath, json);
+                        }
+                        else
+                        {
+                            await SendEvent("error", "API returned empty data.");
+                            return new EmptyResult();
+                        }
+                    }
+                }
+
+                if (rawCreators == null) rawCreators = new List<ExternalCreator>();
+
+                var filteredCreators = rawCreators.AsEnumerable();
+
+                if (ServiceType != "all")
+                {
+                    filteredCreators = filteredCreators.Where(c => string.Equals(c.Service, ServiceType, StringComparison.OrdinalIgnoreCase));
+                }
+
+                if (!string.IsNullOrWhiteSpace(SearchUser))
+                {
+                    filteredCreators = filteredCreators.Where(c =>
+                        (c.Name != null && c.Name.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)) ||
+                        (c.Id != null && c.Id.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)));
+                }
+
+                // Apply Sorting
+                filteredCreators = ArtistSortMode switch
+                {
+                    "popularity" => filteredCreators.OrderByDescending(c => c.Favorited),
+                    "indexed" => filteredCreators.OrderByDescending(c => c.Indexed),
+                    "alphabetical" => filteredCreators.OrderBy(c => c.Name),
+                    "service" => filteredCreators.OrderBy(c => c.Service).ThenBy(c => c.Name),
+                    _ => filteredCreators.OrderByDescending(c => c.Updated)
+                };
+
+                Creators = filteredCreators.Skip(Offset).Take(50).ToList();
+
+                int nextOffset = Offset + 50;
+                await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = nextOffset }));
+                await SendEvent("status", "Rendering results...");
+
+                // Pass "this" model entirely to partial
+                string htmlContent = await RenderPartialToStringAsync("_PostGrid", this);
+                await SendEvent("result", htmlContent);
+                return new EmptyResult();
+            }
+
+            // --- POSTS LOOKUP MODE ---
             int retryCount = 0;
             int maxRetries = 20; // Prevent infinite loops. Stop after checking 20 pages (1000 posts).
             bool keepSearching = true;
 
-            // We use a loop to handle the "OnlyVideos" retry logic
             while (keepSearching)
             {
-                string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
-                if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
-
                 string scope = string.IsNullOrWhiteSpace(SearchUser) ? "Global" : $"User_{SearchUser}";
                 if (ServiceType != "all") scope += $"_{ServiceType}";
 
-                // Note: Offset is part of the filename, so this updates every loop iteration
                 string cacheFileName = $"Feed_{Site}_{scope}_Offset{Offset}.json";
                 string cachePath = Path.Combine(cacheFolder, cacheFileName);
 
                 List<ExternalPost> rawPosts = null;
 
-                // Try to load from cache
                 if (System.IO.File.Exists(cachePath) && System.IO.File.GetLastWriteTime(cachePath) > DateTime.Now.AddDays(-1))
                 {
                     try
@@ -176,82 +289,59 @@ namespace Siphon.Pages
                     catch { }
                 }
 
-                // Fetch from API if not cached
                 if (rawPosts == null)
                 {
                     if (!SearchTriggered) return new EmptyResult();
 
                     await SendEvent("status", $"Contacting API (Offset {Offset})...");
 
-                    // --- TIMEOUT LOGIC START ---
                     var totalTimeout = TimeSpan.FromMinutes(3);
                     var stopwatch = Stopwatch.StartNew();
-
-                    // 1. Fetch Data Task
                     var fetchTask = FetchFromApi(Site, SearchUser, Offset);
-
-                    // Wait for Fetch OR Timeout
                     var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
 
                     if (completedFetch != fetchTask)
                     {
-                        // CASE 1: API Connection Timed Out
                         IsSearchTimeout = true;
                         timeOutType = TimeOutType.StandardTimeout;
                         _logger.LogWarning("Search timed out during API fetch phase.");
-
                         await SendEvent("error", "Search timed out contacting API.");
-                        return new EmptyResult(); // EXIT HERE
+                        return new EmptyResult();
                     }
                     else
                     {
-                        // Fetch completed successfully
                         rawPosts = await fetchTask;
 
                         if (rawPosts.Count() > 0)
                         {
                             if (rawPosts[0].Id.Contains("Not Found"))
                             {
-                                // CASE 2: User Not Found
                                 IsSearchTimeout = true;
                                 timeOutType = TimeOutType.NotFound;
-
-                                // Send Warning and EXIT
                                 await SendEvent("warning", "User not found. Please check the ID and Service.");
-                                return new EmptyResult(); // EXIT HERE
+                                return new EmptyResult();
                             }
                             else if (rawPosts[0].Id.Contains("End Of Posts"))
                             {
-                                // CASE 3: End of Posts - WE MUST STOP LOOPING HERE
                                 timeOutType = TimeOutType.EndOfPosts;
                                 IsSearchTimeout = true;
-
                                 await SendEvent("warning", "Reached the end of available posts.");
-
-                                // If we were looking for videos and found none by the end, we still have to exit.
-                                return new EmptyResult(); // EXIT HERE
+                                return new EmptyResult();
                             }
 
                             if (rawPosts != null && rawPosts.Count > 0)
                             {
-                                // Calculate remaining time for enrichment
                                 var elapsed = stopwatch.Elapsed;
                                 var remaining = totalTimeout - elapsed;
 
                                 if (remaining > TimeSpan.Zero)
                                 {
-                                    // Notify user via stream
                                     await SendEvent("status", $"Found {rawPosts.Count} raw posts. Enriching metadata...");
-
-                                    // 2. Enrichment Task
                                     var enrichTask = EnrichWithVideoDurations(rawPosts, (msg) => SendEvent("status", msg));
-
-                                    // Wait for Enrichment OR Remaining Timeout
                                     var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining));
 
                                     if (completedEnrich != enrichTask)
                                     {
-                                        // CASE 4: Enrichment Timeout (We allow partial results, so we don't exit, just warn)
                                         IsSearchTimeout = true;
                                         _logger.LogWarning("Search timed out during Video Enrichment phase.");
                                         await SendEvent("warning", "Timeout during enrichment. Some metadata may be missing.");
@@ -262,7 +352,6 @@ namespace Siphon.Pages
                                     IsSearchTimeout = true;
                                 }
 
-                                // Update cache only if we didn't timeout
                                 if (!IsSearchTimeout)
                                 {
                                     string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
@@ -272,21 +361,17 @@ namespace Siphon.Pages
                         }
                         else
                         {
-                            // CASE 5: Empty API Result (Unknown Error)
                             IsSearchTimeout = true;
                             timeOutType = TimeOutType.ApiIssue;
-
                             await SendEvent("error", "API returned unknown or empty data.");
-                            return new EmptyResult(); // EXIT HERE
+                            return new EmptyResult();
                         }
                     }
-                    // --- TIMEOUT LOGIC END ---
                 }
                 else
                 {
                     await SendEvent("status", $"Found {rawPosts.Count} Cached Posts. Processing...");
 
-                    // Even if cached, check if we need to enrich posts that don't have duration yet
                     var postsNeedingDuration = rawPosts.Where(p => p.HasVideo && p.VideoDuration == 0).ToList();
                     if (postsNeedingDuration.Any())
                     {
@@ -296,7 +381,6 @@ namespace Siphon.Pages
 
                         if (completed != enrichTask) IsSearchTimeout = true;
 
-                        // Update cache if fully successful
                         if (!IsSearchTimeout)
                         {
                             string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
@@ -307,18 +391,14 @@ namespace Siphon.Pages
 
                 if (rawPosts == null) rawPosts = new List<ExternalPost>();
 
-                // Apply filters
                 var filtered = rawPosts.AsEnumerable();
 
                 if (OnlyVideos) filtered = filtered.Where(p => p.HasVideo);
 
-                // --- RETRY LOGIC START ---
                 bool shouldRetry = false;
 
                 if (OnlyVideos && filtered.Count() == 0)
                 {
-                    // We wanted videos, but this page has none. 
-                    // Increment offset and loop again.
                     Offset += 50;
                     retryCount++;
 
@@ -336,7 +416,6 @@ namespace Siphon.Pages
 
                 if (!shouldRetry)
                 {
-                    // We found results (or we aren't filtering strict videos), so we break the loop and render
                     keepSearching = false;
 
                     if (MinAttachments > 0) filtered = filtered.Where(p => p.AttachmentCount >= MinAttachments);
@@ -351,26 +430,20 @@ namespace Siphon.Pages
 
                     Posts = filtered.ToList();
                 }
-                // --- RETRY LOGIC END ---
             }
 
-            // --- CRITICAL FIX: Tell frontend the correct next offset ---
             int correctNextOffset = Offset + 50;
             await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = correctNextOffset }));
 
             await SendEvent("status", "Rendering results...");
 
-            // Render Partial View to String
-            string html = await RenderPartialToStringAsync("_PostGrid", Posts);
+            string html = await RenderPartialToStringAsync("_PostGrid", this);
 
-            // Send final HTML
             await SendEvent("result", html);
 
-            // FIX: Prevent further rendering by the framework
             return new EmptyResult();
         }
 
-        // Helper to render Partial View to String
         private async Task<string> RenderPartialToStringAsync(string viewName, object model)
         {
             var actionContext = new ActionContext(HttpContext, RouteData, PageContext.ActionDescriptor);
@@ -399,7 +472,6 @@ namespace Siphon.Pages
             }
         }
 
-        // --- ENRICH POSTS WITH VIDEO DURATIONS ---
         private async Task EnrichWithVideoDurations(List<ExternalPost> posts, Func<string, Task> progressCallback = null)
         {
             var videoPosts = posts.Where(p => p.HasVideo && !string.IsNullOrEmpty(p.ThumbnailUrl)).ToList();
@@ -436,10 +508,8 @@ namespace Siphon.Pages
                     }
 
                     Interlocked.Increment(ref processed);
-                    // Optional: Send granular updates every 5 items to avoid flooding the stream
                     if (processed % 5 == 0 && progressCallback != null)
                     {
-                        // Fire and forget the status update to not block
                         _ = progressCallback($"Processed video {processed}/{total}...");
                     }
                 }
@@ -453,7 +523,6 @@ namespace Siphon.Pages
             await Task.WhenAll(tasks);
         }
 
-        // --- DECIDE WHICH API SERVICE TO USE ---
         private async Task<List<ExternalPost>> FetchFromApi(string site, string user, int offset)
         {
             try
@@ -483,7 +552,35 @@ namespace Siphon.Pages
             }
         }
 
-        // Convert API results to ExternalPost format
+        private async Task<List<ExternalCreator>> FetchCreatorsFromApi(string site)
+        {
+            try
+            {
+                if (site.Contains("kemono"))
+                {
+                    var kemonoApi = new KemonoAPI(_kemonoLogger, _kemonoSession);
+                    var results = await kemonoApi.FetchCreatorsAsync();
+                    return ConvertToExternalCreators(results, "kemono.cr");
+                }
+                else if (site.Contains("coomer"))
+                {
+                    var coomerApi = new CoomerAPI(_coomerLogger, _coomerSession);
+                    var results = await coomerApi.FetchCreatorsAsync();
+                    return ConvertToExternalCreators(results, "coomer.st");
+                }
+                else
+                {
+                    _logger.LogWarning($"Unknown site: {site}");
+                    return new List<ExternalCreator>();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error fetching creators from API: {ex.Message}");
+                return new List<ExternalCreator>();
+            }
+        }
+
         private List<ExternalPost> ConvertToExternalPosts(List<KemonoAPI.PostResult> results)
         {
             return results.Select(r => new ExternalPost
@@ -497,7 +594,7 @@ namespace Siphon.Pages
                 AttachmentCount = r.AttachmentCount,
                 HasVideo = r.HasVideo,
                 Published = r.Published,
-                VideoDuration = 0 // Will be enriched later
+                VideoDuration = 0
             }).ToList();
         }
 
@@ -514,11 +611,40 @@ namespace Siphon.Pages
                 AttachmentCount = r.AttachmentCount,
                 HasVideo = r.HasVideo,
                 Published = r.Published,
-                VideoDuration = 0 // Will be enriched later
+                VideoDuration = 0
             }).ToList();
         }
 
-        // --- VIDEO DURATION HANDLER ---
+        private List<ExternalCreator> ConvertToExternalCreators(List<KemonoAPI.CreatorResult> results, string domain)
+        {
+            return results.Select(r => new ExternalCreator
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Service = r.Service,
+                ProfileIconUrl = r.ProfileIconUrl,
+                Updated = r.Updated,
+                Indexed = r.Indexed,
+                Favorited = r.Favorited,
+                OriginalUrl = $"https://{domain}/{r.Service}/user/{r.Id}"
+            }).ToList();
+        }
+
+        private List<ExternalCreator> ConvertToExternalCreators(List<CoomerAPI.CreatorResult> results, string domain)
+        {
+            return results.Select(r => new ExternalCreator
+            {
+                Id = r.Id,
+                Name = r.Name,
+                Service = r.Service,
+                ProfileIconUrl = r.ProfileIconUrl,
+                Updated = r.Updated,
+                Indexed = r.Indexed,
+                Favorited = r.Favorited,
+                OriginalUrl = $"https://{domain}/{r.Service}/user/{r.Id}"
+            }).ToList();
+        }
+
         public async Task<IActionResult> OnGetVideoDurationAsync(string url)
         {
             if (string.IsNullOrEmpty(url) || !IsVideo(url))
@@ -526,7 +652,6 @@ namespace Siphon.Pages
                 return new JsonResult(new { duration = 0 });
             }
 
-            // Check cache first
             if (_durationCache.TryGetValue(url, out double cachedDuration))
             {
                 return new JsonResult(new { duration = cachedDuration });
@@ -540,7 +665,6 @@ namespace Siphon.Pages
 
                 double duration = await GetVideoDuration(url, headers);
 
-                // Cache the result
                 _durationCache.TryAdd(url, duration);
 
                 return new JsonResult(new { duration });
@@ -552,18 +676,15 @@ namespace Siphon.Pages
             }
         }
 
-        // --- PROXY HANDLER (Images & Video Frames) ---
         public async Task<IActionResult> OnGetProxyImageAsync(string url)
         {
             if (string.IsNullOrEmpty(url)) return NotFound();
 
-            // 1. Intercept Video URLs -> Generate Frame
             if (IsVideo(url))
             {
                 return await GenerateAndServeVideoFrame(url);
             }
 
-            // 2. Standard Image Proxy
             try
             {
                 var handler = new HttpClientHandler
@@ -596,7 +717,6 @@ namespace Siphon.Pages
             }
         }
 
-        // --- VIDEO PREVIEW LOGIC (5s or Last Frame) ---
         private async Task<IActionResult> GenerateAndServeVideoFrame(string videoUrl)
         {
             string thumbDir = Path.Combine(_env.WebRootPath, "VideoThumbnailsCache");
@@ -621,13 +741,10 @@ namespace Siphon.Pages
                 string cookie = videoUrl.Contains("kemono") ? _kemonoSession : _coomerSession;
                 string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
 
-                // A. Get Duration
                 double duration = await GetVideoDuration(videoUrl, headers);
 
-                // B. Calculate Seek Time (5s or 0.5s from end if shorter)
                 double seekTime = (duration >= 5.0) ? 5.0 : Math.Max(0, duration - 0.5);
 
-                // C. Extract Frame
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "ffmpeg",

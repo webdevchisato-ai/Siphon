@@ -35,6 +35,17 @@ namespace Siphon.Services.LookupServices
             public DateTime Published { get; set; }
         }
 
+        public class CreatorResult
+        {
+            public string Id { get; set; }
+            public string Name { get; set; }
+            public string Service { get; set; }
+            public string ProfileIconUrl { get; set; }
+            public DateTime Updated { get; set; }
+            public DateTime Indexed { get; set; }
+            public int Favorited { get; set; }
+        }
+
         public async Task<List<PostResult>> FetchPostsAsync(string serviceType, string searchUser, int offset)
         {
             IBrowser browser = null;
@@ -137,6 +148,86 @@ namespace Siphon.Services.LookupServices
             }
         }
 
+        public async Task<List<CreatorResult>> FetchCreatorsAsync()
+        {
+            IBrowser browser = null;
+            try
+            {
+                var browserFetcher = new BrowserFetcher();
+                await browserFetcher.DownloadAsync();
+
+                browser = await Puppeteer.LaunchAsync(new LaunchOptions
+                {
+                    Headless = true,
+                    Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
+                });
+
+                await using var page = await browser.NewPageAsync();
+                string userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+                await page.SetUserAgentAsync(userAgent);
+
+                if (!string.IsNullOrWhiteSpace(_sessionCookie))
+                {
+                    await page.SetCookieAsync(new CookieParam
+                    {
+                        Name = "session",
+                        Value = _sessionCookie,
+                        Domain = $".{Domain}",
+                        Path = "/",
+                        Secure = true
+                    });
+                }
+
+                await page.GoToAsync($"https://{Domain}", new NavigationOptions
+                {
+                    WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }
+                });
+
+                var browserCookies = await page.GetCookiesAsync($"https://{Domain}");
+
+                string apiUrl = $"https://{Domain}/api/v1/creators";
+                _logger.LogInformation($"Fetching Kemono Creators API: {apiUrl}");
+
+                var handler = new HttpClientHandler
+                {
+                    CookieContainer = new CookieContainer(),
+                    UseCookies = true,
+                    AutomaticDecompression = DecompressionMethods.All
+                };
+
+                foreach (var c in browserCookies)
+                {
+                    handler.CookieContainer.Add(new Cookie(c.Name, c.Value, c.Path, c.Domain));
+                }
+
+                using var client = new HttpClient(handler);
+                client.DefaultRequestHeaders.UserAgent.ParseAdd(userAgent);
+                client.DefaultRequestHeaders.Referrer = new Uri($"https://{Domain}/");
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/css"));
+
+                var response = await client.GetAsync(apiUrl);
+                string jsonContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError($"Kemono API Creators Request Failed: {response.StatusCode}. Response: {jsonContent}");
+                    return new List<CreatorResult>();
+                }
+
+                return ParseCreators(jsonContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Kemono Creators Fetch Error: {ex.Message}");
+                return new List<CreatorResult>();
+            }
+            finally
+            {
+                if (browser != null) await browser.CloseAsync();
+            }
+        }
+
         private string BuildApiUrl(string serviceType, string searchUser, int offset)
         {
             bool isUserFeed = !string.IsNullOrWhiteSpace(searchUser) && serviceType != "all";
@@ -231,6 +322,58 @@ namespace Siphon.Services.LookupServices
             });
 
             return resultsBag.OrderByDescending(x => x.Published).ToList();
+        }
+
+        private List<CreatorResult> ParseCreators(string jsonContent)
+        {
+            JsonNode rootNode;
+            try
+            {
+                rootNode = JsonNode.Parse(jsonContent);
+            }
+            catch
+            {
+                _logger.LogError("Failed to parse Kemono Creators JSON.");
+                return new List<CreatorResult>();
+            }
+
+            JsonArray creatorsArray = rootNode as JsonArray;
+
+            if (creatorsArray == null)
+            {
+                _logger.LogWarning($"No valid array found in Kemono Creators response.");
+                return new List<CreatorResult>();
+            }
+
+            var resultsBag = new ConcurrentBag<CreatorResult>();
+
+            Parallel.ForEach(creatorsArray, new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount }, node =>
+            {
+                try
+                {
+                    string service = node["service"]?.ToString();
+                    string id = node["id"]?.ToString();
+
+                    var creator = new CreatorResult
+                    {
+                        Id = id,
+                        Name = node["name"]?.ToString() ?? id,
+                        Service = service,
+                        ProfileIconUrl = $"https://{ImageDomain}/icons/{service}/{id}",
+                        Updated = DateTimeOffset.FromUnixTimeSeconds(long.TryParse(node["updated"]?.ToString(), out var tsUp) ? tsUp : 0).DateTime,
+                        Indexed = DateTimeOffset.FromUnixTimeSeconds(long.TryParse(node["indexed"]?.ToString(), out var tsIdx) ? tsIdx : 0).DateTime,
+                        Favorited = int.TryParse(node["favorited"]?.ToString(), out var favs) ? favs : 0
+                    };
+
+                    resultsBag.Add(creator);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning($"Failed to parse Kemono creator: {ex.Message}");
+                }
+            });
+
+            return resultsBag.ToList();
         }
 
         private string GetThumbnailFromNode(JsonNode node)

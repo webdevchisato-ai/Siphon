@@ -188,7 +188,17 @@
                     <h5 class="fw-bold mb-3"><i class="bi bi-sliders"></i> Filters</h5>
                     <form method="get" id="filterForm">
                         <input type="hidden" name="SearchTriggered" value="true" />
-                        <input type="hidden" name="Offset" value="0" />
+                        <input type="hidden" name="Offset" id="Offset" value="@Model.Offset" />
+                        <input type="hidden" name="ArtistOffset" id="ArtistOffset" value="@Model.ArtistOffset" />
+                        <input type="hidden" name="ReturnToArtists" id="ReturnToArtists" value="@Model.ReturnToArtists.ToString().ToLower()" />
+
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">View Mode</label>
+                            <select asp-for="ViewMode" id="viewModeSelect" class="form-select form-select-sm">
+                                <option value="artists">Artists</option>
+                                <option value="posts">Posts</option>
+                            </select>
+                        </div>
 
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Site</label>
@@ -218,50 +228,63 @@
 
                         <div class="mb-3">
                             <label class="form-label small fw-bold">User ID or Name</label>
-                            <input asp-for="SearchUser" class="form-control form-control-sm" placeholder="e.g. 3295915" />
+                            <input asp-for="SearchUser" id="SearchUser" class="form-control form-control-sm" placeholder="e.g. 3295915" />
                         </div>
 
-                        <div class="mb-3 form-check form-switch">
-                            <input class="form-check-input" type="checkbox" asp-for="OnlyVideos" id="onlyVideosCheck">
-                            <label class="form-check-label small">Only Videos</label>
+                        <div class="mb-3 artist-specific-filter" style="display: none;">
+                            <label class="form-label small fw-bold">Sort Artists By</label>
+                            <select asp-for="ArtistSortMode" class="form-select form-select-sm">
+                                <option value="popularity">Popularity (Favorites)</option>
+                                <option value="updated">Date Updated</option>
+                                <option value="indexed">Date Indexed</option>
+                                <option value="alphabetical">Alphabetical</option>
+                                <option value="service">Service</option>
+                            </select>
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Min Attachments</label>
-                            <input type="number" asp-for="MinAttachments" class="form-control form-control-sm" min="0" />
-                        </div>
-
-                        <hr class="my-3" />
-
-                        <div class="mb-3">
-                            <div class="form-check form-switch mb-2">
-                                <input class="form-check-input" type="checkbox" asp-for="EnableVideoLengthFilter" id="videoLengthToggle">
-                                <label class="form-check-label small fw-bold">Video Length Filter</label>
+                        <div class="post-specific-filter" style="display: none;">
+                            <div class="mb-3 form-check form-switch">
+                                <input class="form-check-input" type="checkbox" asp-for="OnlyVideos" id="onlyVideosCheck">
+                                <label class="form-check-label small">Only Videos</label>
                             </div>
 
-                            <div id="videoLengthFilterContent" class="@(Model.EnableVideoLengthFilter ? "" : "filter-disabled")">
-                                <div class="video-length-inputs">
-                                    <input type="number" asp-for="MinVideoLength" id="minVideoLength" class="form-control form-control-sm" min="0" max="10000" />
-                                    <span class="small">to</span>
-                                    <input type="number" asp-for="MaxVideoLength" id="maxVideoLength" class="form-control form-control-sm" min="0" max="10000" />
+                            <div class="mb-3">
+                                <label class="form-label small fw-bold">Min Attachments</label>
+                                <input type="number" asp-for="MinAttachments" class="form-control form-control-sm" min="0" />
+                            </div>
+
+                            <hr class="my-3" />
+
+                            <div class="mb-3">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" asp-for="EnableVideoLengthFilter" id="videoLengthToggle">
+                                    <label class="form-check-label small fw-bold">Video Length Filter</label>
                                 </div>
 
-                                <div class="dual-range-container">
-                                    <div class="dual-range-slider">
-                                        <div class="dual-range-progress" id="rangeProgress"></div>
+                                <div id="videoLengthFilterContent" class="@(Model.EnableVideoLengthFilter ? "" : "filter-disabled")">
+                                    <div class="video-length-inputs">
+                                        <input type="number" asp-for="MinVideoLength" id="minVideoLength" class="form-control form-control-sm" min="0" max="10000" />
+                                        <span class="small">to</span>
+                                        <input type="number" asp-for="MaxVideoLength" id="maxVideoLength" class="form-control form-control-sm" min="0" max="10000" />
                                     </div>
-                                    <input type="range" min="0" max="10000" value="@Model.MinVideoLength" id="rangeMin" class="range-input" />
-                                    <input type="range" min="0" max="10000" value="@Model.MaxVideoLength" id="rangeMax" class="range-input" />
-                                </div>
 
-                                <div class="range-values">
-                                    <span id="minDisplay">0s</span>
-                                    <span id="maxDisplay">2h 46m</span>
+                                    <div class="dual-range-container">
+                                        <div class="dual-range-slider">
+                                            <div class="dual-range-progress" id="rangeProgress"></div>
+                                        </div>
+                                        <input type="range" min="0" max="10000" value="@Model.MinVideoLength" id="rangeMin" class="range-input" />
+                                        <input type="range" min="0" max="10000" value="@Model.MaxVideoLength" id="rangeMax" class="range-input" />
+                                    </div>
+
+                                    <div class="range-values">
+                                        <span id="minDisplay">0s</span>
+                                        <span id="maxDisplay">2h 46m</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <button type="submit" class="btn btn-primary btn-sm w-100">Apply Filters</button>
+                        <button type="submit" class="btn btn-primary btn-sm w-100" onclick="document.getElementById('Offset').value='0';">Apply Filters</button>
                         <a href="/ExternalIntegrations" class="btn btn-outline-secondary btn-sm w-100 mt-2">Reset</a>
                     </form>
                 </div>
@@ -270,10 +293,10 @@
 
         <div class="col-md-9 col-lg-10">
 
-            <div id="statusAlert" class="alert d-flex align-items-center mb-4" role="alert" style="display: none;">
-                <i id="statusIcon" class="bi flex-shrink-0 me-2 fs-4"></i>
+            <div id="statusAlert" class="alert d-flex align-items-center shadow" role="alert" style="display: none; position: fixed; bottom: 30px; right: 30px; z-index: 9999; min-width: 300px;">
+                <i id="statusIcon" class="bi flex-shrink-0 me-3 fs-3"></i>
                 <div>
-                    <strong id="statusHeader"></strong>
+                    <strong id="statusHeader" class="d-block"></strong>
                     <div class="small" id="statusMessage"></div>
                 </div>
             </div>
@@ -297,12 +320,12 @@
             </div>
 
             <div class="d-flex justify-content-center my-5 gap-2" id="paginationControls" style="display: none;">
-                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true"
-                   class="btn btn-outline-dark px-4">
+                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
+                   class="btn btn-outline-dark px-4" id="btnLoadPrev">
                     <i class="bi bi-arrow-left"></i> Previous
                 </a>
 
-                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true"
+                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
                    class="btn btn-dark px-4" id="btnLoadMore">
                     Load More <i class="bi bi-arrow-right"></i>
                 </a>
@@ -311,13 +334,23 @@
     </div>
 </div>
 
-<div id="context-menu">
-    <button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>
-    <button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>
-    <button onclick="downloadLink()"><i class="bi bi-download me-2"></i> Download</button>
-</div>
+<div id="context-menu"></div>
 
 <script>
+    // --- 0. DYNAMIC FILTER VISIBILITY ---
+    const viewModeSelect = document.getElementById('viewModeSelect');
+    const artistFilters = document.querySelectorAll('.artist-specific-filter');
+    const postFilters = document.querySelectorAll('.post-specific-filter');
+
+    function toggleFilters() {
+        const isArtists = viewModeSelect.value === 'artists';
+        artistFilters.forEach(el => el.style.display = isArtists ? 'block' : 'none');
+        postFilters.forEach(el => el.style.display = isArtists ? 'none' : 'block');
+    }
+
+    viewModeSelect.addEventListener('change', toggleFilters);
+    document.addEventListener('DOMContentLoaded', toggleFilters);
+
     // --- 1. STREAMING LOGIC (BUFFERED) ---
     document.addEventListener('DOMContentLoaded', () => {
         const searchTriggered = @(Model.SearchTriggered.ToString().ToLower());
@@ -337,8 +370,8 @@
         // Initial UI State
         statusAlert.style.display = 'flex';
         statusAlert.style.opacity = '1'; // Ensure opacity is reset
-        statusAlert.className = 'alert alert-info d-flex align-items-center mb-4';
-        statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-2 fs-4';
+        statusAlert.className = 'alert alert-info d-flex align-items-center shadow';
+        statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-3 fs-3';
         statusHeader.innerText = "Processing";
         statusMessage.innerText = "Initializing connection...";
 
@@ -371,7 +404,7 @@
                 }
             }
         } catch (err) {
-            statusAlert.className = 'alert alert-danger';
+            statusAlert.className = 'alert alert-danger d-flex align-items-center shadow';
             statusMessage.innerText = "Connection failed: " + err.message;
             console.error(err);
         }
@@ -389,13 +422,13 @@
                 const meta = JSON.parse(data.payload);
                 updatePaginationLinks(meta.nextOffset);
             } else if (data.type === 'error') {
-                statusAlert.className = 'alert alert-danger d-flex align-items-center mb-4';
-                statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-2 fs-4';
+                statusAlert.className = 'alert alert-danger d-flex align-items-center shadow';
+                statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-3 fs-3';
                 statusHeader.innerText = "Error";
                 statusMessage.innerText = data.payload;
             } else if (data.type === 'warning') {
-                statusAlert.className = 'alert alert-warning d-flex align-items-center mb-4';
-                statusIcon.className = 'bi bi-exclamation-circle-fill flex-shrink-0 me-2 fs-4';
+                statusAlert.className = 'alert alert-warning d-flex align-items-center shadow';
+                statusIcon.className = 'bi bi-exclamation-circle-fill flex-shrink-0 me-3 fs-3';
                 statusHeader.innerText = "Warning";
                 statusMessage.innerText = data.payload;
             } else if (data.type === 'result') {
@@ -404,8 +437,8 @@
                 paginationControls.style.display = 'flex';
 
                 // Show Success State
-                statusAlert.className = 'alert alert-success d-flex align-items-center mb-4';
-                statusIcon.className = 'bi bi-check-circle-fill flex-shrink-0 me-2 fs-4';
+                statusAlert.className = 'alert alert-success d-flex align-items-center shadow';
+                statusIcon.className = 'bi bi-check-circle-fill flex-shrink-0 me-3 fs-3';
                 statusHeader.innerText = "Complete";
                 statusMessage.innerText = "Loaded successfully.";
 
@@ -418,8 +451,8 @@
                     }, 500);
                 }, 2000);
             } else if (data.type === 'info') {
-                statusAlert.className = 'alert alert-info d-flex align-items-center mb-4';
-                statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-2 fs-4';
+                statusAlert.className = 'alert alert-info d-flex align-items-center shadow';
+                statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-3 fs-3';
                 statusHeader.innerText = "Info";
                 statusMessage.innerText = data.payload;
             }
@@ -447,12 +480,24 @@
     document.addEventListener('click', () => menu.style.display = 'none');
     document.addEventListener('scroll', () => menu.style.display = 'none');
 
-    function showContextMenu(e, url, el) {
+    function showContextMenu(e, type, url, el, id, service) {
         e.preventDefault();
         e.stopPropagation();
 
         activeUrl = url;
         activeCard = el;
+
+        menu.innerHTML = ''; // clear
+
+        if (type === 'artist') {
+            menu.innerHTML += `<button onclick="showPostsForArtist('${id}', '${service}')"><i class="bi bi-collection me-2"></i> Show Posts</button>`;
+            menu.innerHTML += `<button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>`;
+            menu.innerHTML += `<button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>`;
+        } else {
+            menu.innerHTML += `<button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>`;
+            menu.innerHTML += `<button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>`;
+            menu.innerHTML += `<button onclick="downloadLink()"><i class="bi bi-download me-2"></i> Download</button>`;
+        }
 
         let x = e.clientX;
         let y = e.clientY;
@@ -463,6 +508,24 @@
         menu.style.display = 'block';
         menu.style.left = `${x}px`;
         menu.style.top = `${y}px`;
+    }
+
+    function showPostsForArtist(id, service) {
+        document.getElementById('viewModeSelect').value = 'posts';
+        document.getElementById('serviceSelect').value = service;
+        document.getElementById('SearchUser').value = id;
+        document.getElementById('ArtistOffset').value = document.getElementById('Offset').value;
+        document.getElementById('ReturnToArtists').value = 'true';
+        document.getElementById('Offset').value = '0';
+        document.getElementById('filterForm').submit();
+    }
+
+    function backToArtists() {
+        document.getElementById('viewModeSelect').value = 'artists';
+        document.getElementById('SearchUser').value = '';
+        document.getElementById('Offset').value = document.getElementById('ArtistOffset').value;
+        document.getElementById('ReturnToArtists').value = 'false';
+        document.getElementById('filterForm').submit();
     }
 
     function openLink() { window.open(activeUrl, '_blank'); }
@@ -664,7 +727,7 @@
                 };
                 tempImg.src = src;
 
-                if (videoUrl) {
+                if (videoUrl && videoUrl !== "undefined" && videoUrl !== "") {
                     this.fetchVideoDuration(img, videoUrl);
                 }
             }
