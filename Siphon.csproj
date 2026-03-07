@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -43,6 +43,7 @@
     <Folder Include="wwwroot\Lookups\" />
     <Folder Include="wwwroot\ExternalIntegrationCache\" />
     <Folder Include="wwwroot\Convert\" />
+    <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
     <Folder Include="wwwroot\VideoThumbnailsCache\" />
   </ItemGroup>

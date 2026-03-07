@@ -9,7 +9,7 @@
         <h2><i class="bi bi-archive-fill text-primary"></i> Archive Library</h2>
     </div>
 
-    @if (Model.Files.Count == 0)
+    @if (Model.TotalRecords == 0)
     {
         <div class="alert alert-secondary text-center py-5 shadow-sm rounded-3">
             <i class="bi bi-server fs-1 mb-2 d-block text-muted"></i>
@@ -25,9 +25,11 @@
                     <thead class="bg-light">
                         <tr>
                             <th scope="col" class="ps-4 py-3">Filename</th>
+                            <th scope="col">Status</th>
                             <th scope="col">Date Downloaded</th>
                             <th scope="col">Size</th>
-                            <th scope="col" class="pe-4">URL</th>
+                            <th scope="col">URL</th>
+                            <th scope="col" class="pe-4 text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -38,13 +40,23 @@
                                     <i class="bi bi-file-earmark-zip me-2 text-secondary"></i>
                                     @file.Name
                                 </td>
+                                <td>
+                                    @if (file.IsArchived)
+                                    {
+                                        <span class="badge bg-primary">Archived</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">Downloaded</span>
+                                    }
+                                </td>
                                 <td class="text-muted" style="white-space: nowrap;">
                                     @file.DownloadDateTime.ToString("MMM dd, yyyy HH:mm")
                                 </td>
                                 <td class="text-muted" style="white-space: nowrap;">
                                     @Model.FormatBytes(file.FileSize)
                                 </td>
-                                <td class="text-muted small pe-4"
+                                <td class="text-muted small"
                                     style="max-width: 300px; cursor: pointer; transition: color 0.2s;"
                                     title="Click to copy"
                                     onclick="navigator.clipboard.writeText('@file.URL'); this.querySelector('.url-text').innerText = 'Copied!'; setTimeout(() => this.querySelector('.url-text').innerText = '@file.URL', 2000);">
@@ -54,13 +66,59 @@
                                         <span class="url-text text-truncate">@file.URL</span>
                                     </div>
                                 </td>
+                                <td class="pe-4 text-end">
+                                    <form method="post" asp-page-handler="Delete" onsubmit="return confirm('Are you sure you want to remove this record from the archive?');" class="d-inline">
+                                        <input type="hidden" name="url" value="@file.URL" />
+                                        <input type="hidden" name="p" value="@Model.P" />
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Delete Archive Record">
+                                            <i class="bi bi-trash-fill"></i>
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <div class="card-footer bg-white text-end text-muted small py-2">
-                Total Archived Files: @Model.Files.Count
+
+            <div class="card-footer bg-white d-flex justify-content-between align-items-center py-3">
+                <span class="text-muted small">
+                    Showing @(((Model.P - 1) * ArchiveModel.PageSize) + 1) to @(Math.Min(Model.P * ArchiveModel.PageSize, Model.TotalRecords)) of @Model.TotalRecords records
+                </span>
+
+                @if (Model.TotalPages > 1)
+                {
+                    <nav aria-label="Archive pagination">
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item @(Model.P == 1 ? "disabled" : "")">
+                                <a class="page-link" asp-page="./Archive" asp-route-p="@(Model.P - 1)" aria-label="Previous">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
+
+                            @for (int i = 1; i <= Model.TotalPages; i++)
+                            {
+                                // Only show a few surrounding pages to keep the UI clean
+                                if (i == 1 || i == Model.TotalPages || (i >= Model.P - 2 && i <= Model.P + 2))
+                                {
+                                    <li class="page-item @(i == Model.P ? "active" : "")">
+                                        <a class="page-link" asp-page="./Archive" asp-route-p="@i">@i</a>
+                                    </li>
+                                }
+                                else if (i == Model.P - 3 || i == Model.P + 3)
+                                {
+                                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                                }
+                            }
+
+                            <li class="page-item @(Model.P == Model.TotalPages ? "disabled" : "")">
+                                <a class="page-link" asp-page="./Archive" asp-route-p="@(Model.P + 1)" aria-label="Next">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                }
             </div>
         </div>
     }
