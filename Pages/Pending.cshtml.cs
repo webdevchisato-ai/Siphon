@@ -301,6 +301,13 @@ namespace Siphon.Pages
 
             if (System.IO.File.Exists(srcPath))
             {
+                if (System.IO.File.Exists(destPath))
+                {
+                    //append (some id) this will also add a record to db as this will not rhrow a io error
+                    string name = Path.GetFileNameWithoutExtension(destPath);
+                    string ext = Path.GetExtension(destPath);
+                    srcPath = Path.Combine(_env.WebRootPath, "Pending", $"{name}{DateTime.Now.ToString()}.{ext}"); 
+                }
                 System.IO.File.Move(srcPath, destPath);
                 CleanupExtras(srcPath);
             }
