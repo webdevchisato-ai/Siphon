@@ -1,4 +1,6 @@
-﻿using System.Collections.Concurrent;
+﻿using Siphon.Extensions;
+using System.Collections.Concurrent;
+using System.Diagnostics.Eventing.Reader;
 using System.Text.Json.Serialization;
 
 namespace Siphon.Services
@@ -30,17 +32,19 @@ namespace Siphon.Services
         private readonly PreviewGenerator _previewGenerator;
         private readonly ILogger<DownloadManager> _logger;
         private readonly IWebHostEnvironment _env;
+        private readonly ArchiverService _archiverService;
 
         private volatile SemaphoreSlim _semaphore;
         private readonly string _configPath;
         private int _currentThreadLimit = 3;
 
-        public DownloadManager(IServiceProvider serviceProvider, PreviewGenerator previewGenerator, ILogger<DownloadManager> logger, IWebHostEnvironment env)
+        public DownloadManager(IServiceProvider serviceProvider, PreviewGenerator previewGenerator, ILogger<DownloadManager> logger, IWebHostEnvironment env, ArchiverService archiverService)
         {
             _serviceProvider = serviceProvider;
             _previewGenerator = previewGenerator;
             _logger = logger;
             _env = env;
+            _archiverService = archiverService;
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
 
             LoadAndApplyConfig();
@@ -165,6 +169,36 @@ namespace Siphon.Services
                     }
 
                     AddURLToPendingFiles(job.Filename, job.Url);
+                    long fileSize = 0;
+                    bool sizeFound = false;
+
+                    try
+                    {
+                        fileSize = new FileInfo(job.FinalFilePath).Length;
+                        sizeFound = true;
+                    }
+                    catch (Exception ex1)
+                    {
+                        _logger.LogWarning("Could not get file size for archiving:");
+                        _logger.LogWarning($"   File path was: {job.FinalFilePath}");
+                        _logger.LogWarning($"   Error: {ex1.Message}");
+                        _logger.LogWarning($"   Trying Normalized Fallback");
+                    }
+
+                    if (!sizeFound)
+                    {
+                        try
+                        {
+                            fileSize = new FileInfo(job.FinalFilePath).GetFileSizeNormalized();
+                        }
+                        catch (Exception ex2)
+                        {
+                            _logger.LogWarning("Tried Normalized Lookup and Failed to get File size for archiving:");
+                            _logger.LogWarning($"   File path was: {job.FinalFilePath}");
+                            _logger.LogWarning($"   Error: {ex2.Message}");
+                        }
+                    }
+                    _archiverService.AddDownload(job.Url, job.Filename, DateTime.UtcNow, fileSize);
                 }
             }
             catch (OperationCanceledException)

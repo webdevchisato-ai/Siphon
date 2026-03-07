@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Siphon.Services;
+using System;
 
 namespace Siphon.Pages
 {
@@ -9,12 +10,14 @@ namespace Siphon.Pages
     {
         private readonly DownloadManager _downloadManager;
         private readonly TorProxyManager _torManager;
+        private readonly ArchiverService _archiverService;
         private readonly string _configPath;
 
-        public DownloaderModel(DownloadManager downloadManager, TorProxyManager torManager)
+        public DownloaderModel(DownloadManager downloadManager, TorProxyManager torManager, ArchiverService archiverService)
         {
             _downloadManager = downloadManager;
             _torManager = torManager;
+            _archiverService = archiverService;
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
         }
 
@@ -54,10 +57,15 @@ namespace Siphon.Pages
             LoadConfig();
         }
 
-        public IActionResult OnPost()
+        // UPDATED: Now accepts a Force parameter to override the archive
+        public IActionResult OnPost(bool Force = false)
         {
             if (!string.IsNullOrWhiteSpace(Url))
             {
+                if (Force)
+                {
+                    _archiverService.RemoveDownloadArchive(Url);
+                }
                 _downloadManager.QueueUrl(Url);
             }
             return RedirectToPage();
@@ -69,12 +77,32 @@ namespace Siphon.Pages
             return RedirectToPage();
         }
 
-        // NEW: Handler for Hot Reload Button
         public IActionResult OnPostReloadConfig()
         {
             // Trigger logic in Manager (reloads threads)
             _downloadManager.ReloadConfig();
             return new JsonResult(new { success = true, message = "Configuration reloaded successfully." });
+        }
+
+        // NEW: Endpoint to let the frontend quickly check the archive state
+        public IActionResult OnGetCheckArchive(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return new JsonResult(new { isArchived = false });
+
+            var isArchived = _archiverService.DownloadExists(url);
+            if (isArchived)
+            {
+                var record = _archiverService.GetDownload(url);
+                return new JsonResult(new
+                {
+                    isArchived = true,
+                    filename = string.IsNullOrWhiteSpace(record.FileName) ? $"Archived_File_{record.Id}" : record.FileName,
+                    date = record.ArchiveDate.ToString("g"),
+                    size = FormatBytes(record.FileSize)
+                });
+            }
+
+            return new JsonResult(new { isArchived = false });
         }
 
         // --- AJAX Handlers ---
@@ -104,6 +132,22 @@ namespace Siphon.Pages
         {
             _ = _torManager.RebuildCircuitAsync();
             return new JsonResult(new { success = true, message = "Tor circuit rebuild initiated." });
+        }
+
+        // --- Helper Methods ---
+
+        private string FormatBytes(long? bytes)
+        {
+            if (!bytes.HasValue) return "Unknown Size";
+
+            string[] suffixes = { "B", "KB", "MB", "GB", "TB", "PB", "EB" };
+            if (bytes.Value == 0) return "0 B";
+
+            long bytesValue = Math.Abs(bytes.Value);
+            int place = Convert.ToInt32(Math.Floor(Math.Log(bytesValue, 1024)));
+            double num = Math.Round(bytesValue / Math.Pow(1024, place), 1);
+
+            return (Math.Sign(bytes.Value) * num).ToString() + " " + suffixes[place];
         }
 
         // --- Config Methods ---

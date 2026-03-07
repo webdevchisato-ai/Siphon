@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
+using Siphon.Data;
 using Siphon.Services;
 
 namespace Siphon
@@ -10,6 +11,12 @@ namespace Siphon
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+
+            builder.Services.AddDbContextFactory<Siphon.Data.ArchiverDbContext>(options =>
+                options.UseSqlite("Data Source=Databases/archiver.db"));
+
+            // 2. Register the ArchiverService as a Singleton
+            builder.Services.AddSingleton<ArchiverService>();
 
             // Add services to the container.
             builder.Services.AddSingleton<UserService>();
@@ -47,6 +54,13 @@ namespace Siphon
             });
 
             var app = builder.Build();
+
+            using (var scope = app.Services.CreateScope())
+            {
+                var dbFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ArchiverDbContext>>();
+                using var context = dbFactory.CreateDbContext();
+                context.Database.EnsureCreated();
+            }
 
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())

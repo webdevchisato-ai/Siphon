@@ -70,6 +70,8 @@ namespace Siphon.Services
                     await new KemonoDownloader(_downloadPath, job.Url, job, _kemonoSession, _logger, _env).Download(token);
                 else if (job.Url.Contains("hentaidude.xxx"))
                     await new HentaiDudeDownloader(_downloadPath, job.Url, job, _logger, _cfClearance, _mangaViewCookie, _HentaiDudeAgent).Download(token);
+                else if (job.Url.Contains("rule34video.com"))
+                    await new Rule34VideoDownloader(_downloadPath, job.Url, job, _logger).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 

@@ -99,17 +99,21 @@
             </div>
         </div>
     </div>
+
     <div class="row justify-content-center mb-5 mt-4">
         <div class="col-md-8">
             <div class="card shadow-sm border-0">
                 <div class="card-body p-4">
                     <h4 class="card-title mb-3">Add New Download</h4>
-                    <form method="post" class="d-flex gap-2">
-                        <input type="text" class="form-control form-control-lg" name="Url" placeholder="Paste video URL here..." required />
-                        <button class="btn btn-primary btn-lg px-4" type="submit">
+
+                    <form id="downloadForm" method="post" class="d-flex gap-2" onsubmit="checkArchiveAndDownload(event)">
+                        <input type="hidden" name="Force" id="forceInput" value="false" />
+                        <input type="text" id="urlInput" class="form-control form-control-lg" asp-for="Url" placeholder="Paste video URL here..." required />
+                        <button class="btn btn-primary btn-lg px-4" type="submit" id="btnStartDownload">
                             <i class="bi bi-download"></i> Start
                         </button>
                     </form>
+
                 </div>
             </div>
         </div>
@@ -125,6 +129,45 @@
     </div>
 
     <div id="jobsContainer" class="row g-3"></div>
+</div>
+
+<div class="modal fade" id="archiveWarningModal" tabindex="-1" aria-labelledby="archiveWarningModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-warning text-dark border-0">
+                <h5 class="modal-title fw-bold" id="archiveWarningModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Already Archived
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>This URL has already been downloaded and exists in your archive. Are you sure you want to download it again?</p>
+
+                <div class="bg-light p-3 rounded-3 mb-3 border">
+                    <div class="mb-1">
+                        <small class="text-muted fw-bold">Filename:</small>
+                        <span id="modalFileName" class="text-break"></span>
+                    </div>
+                    <div class="mb-1">
+                        <small class="text-muted fw-bold">Archive Date:</small>
+                        <span id="modalFileDate"></span>
+                    </div>
+                    <div>
+                        <small class="text-muted fw-bold">File Size:</small>
+                        <span id="modalFileSize"></span>
+                    </div>
+                </div>
+
+                <p class="text-danger small mb-0">
+                    <i class="bi bi-info-circle"></i> Proceeding will delete the existing archive record and start a fresh download.
+                </p>
+            </div>
+            <div class="modal-footer border-0 bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="forceDownload()">Download Anyway</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -156,7 +199,6 @@
     }
 
     // --- Tor Functions ---
-    // ... (Your existing Tor functions remain unchanged) ...
     function updateTorStatus() {
         fetch('/Downloader?handler=TorStatus')
             .then(response => response.json())
@@ -207,6 +249,53 @@
             btn.disabled = false;
             btn.innerText = "Error";
         });
+    }
+
+    // --- NEW: Downloader Submission & Archive Checks ---
+    function checkArchiveAndDownload(e) {
+        e.preventDefault(); // Stop standard form submission
+
+        const urlInput = document.getElementById('urlInput').value;
+        const btn = document.getElementById('btnStartDownload');
+
+        if (!urlInput) return;
+
+        // Visual loading state
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Checking...';
+
+        // Query the backend
+        fetch(`/Downloader?handler=CheckArchive&url=${encodeURIComponent(urlInput)}`)
+            .then(response => response.json())
+            .then(data => {
+                // Restore button
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-download"></i> Start';
+
+                if (data.isArchived) {
+                    // Populate modal
+                    document.getElementById('modalFileName').innerText = data.filename;
+                    document.getElementById('modalFileDate').innerText = data.date;
+                    document.getElementById('modalFileSize').innerText = data.size;
+
+                    // Show modal
+                    const modal = new bootstrap.Modal(document.getElementById('archiveWarningModal'));
+                    modal.show();
+                } else {
+                    // Not archived, safe to proceed
+                    document.getElementById('downloadForm').submit();
+                }
+            })
+            .catch(err => {
+                console.error("Archive check failed, proceeding anyway", err);
+                document.getElementById('downloadForm').submit(); // Fail-safe
+            });
+    }
+
+    function forceDownload() {
+        // Switch the hidden flag to true and force submit
+        document.getElementById('forceInput').value = "true";
+        document.getElementById('downloadForm').submit();
     }
 
     // --- Downloader Functions ---

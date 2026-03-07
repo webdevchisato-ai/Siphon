@@ -51,5 +51,37 @@
 
             return new FileInfo(destPath);
         }
+
+        public static long GetFileSizeNormalized(this FileInfo file)
+        {
+            if (file == null || file.Directory == null || !file.Directory.Exists)
+            {
+                throw new FileNotFoundException("File or its directory not found.", file?.FullName);
+            }
+
+            // Strip extension, then normalize the target file's name
+            string normalizedInput = NormalizeName(Path.GetFileNameWithoutExtension(file.Name));
+
+            foreach (var currentFile in file.Directory.GetFiles())
+            {
+                // Strip the extension from the file in the directory, then normalize
+                string normalizedCurrentFile = NormalizeName(Path.GetFileNameWithoutExtension(currentFile.Name));
+
+                if (normalizedCurrentFile == normalizedInput)
+                {
+                    return currentFile.Length;
+                }
+            }
+
+            throw new FileNotFoundException($"No matching file found for {file.FullName} in directory {file.Directory.FullName}");
+        }
+
+        private static string NormalizeName(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+
+            // Filters out anything that isn't a letter or a digit, then makes it lowercase
+            return new string(input.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        }
     }
 }

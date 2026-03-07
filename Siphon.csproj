@@ -22,22 +22,27 @@
 
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.3" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.3">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.3" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.23.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="PuppeteerExtraSharp" Version="3.1.1" />
-    <PackageReference Include="PuppeteerSharp" Version="20.2.5" />
+    <PackageReference Include="PuppeteerSharp" Version="21.1.1" />
   </ItemGroup>
 
   <ItemGroup>
     <Folder Include="Config\" />
+    <Folder Include="Databases\" />
     <Folder Include="Services\PhotoDownloaders\" />
     <Folder Include="wwwroot\Approved\" />
     <Folder Include="wwwroot\Extra_Approved\" />
     <Folder Include="wwwroot\Lookups\" />
     <Folder Include="wwwroot\ExternalIntegrationCache\" />
     <Folder Include="wwwroot\Convert\" />
-    <Folder Include="wwwroot\Pending\" />
     <Folder Include="wwwroot\PreviewImages\" />
     <Folder Include="wwwroot\VideoThumbnailsCache\" />
   </ItemGroup>

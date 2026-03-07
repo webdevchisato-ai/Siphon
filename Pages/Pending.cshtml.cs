@@ -26,15 +26,17 @@ namespace Siphon.Pages
         private readonly PreviewGenerator _previewGenerator;
         private readonly UserService _userService;
         private readonly ILogger<PendingModel> _logger;
+        private readonly ArchiverService _archiverService;
 
         private static Dictionary<string, DateTime> oldPendingFiles; //file name, time added
 
-        public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator, UserService userService, ILogger<PendingModel> logger)
+        public PendingModel(IWebHostEnvironment env, PreviewGenerator previewGenerator, UserService userService, ILogger<PendingModel> logger, ArchiverService archiverService)
         {
             _env = env;
             _previewGenerator = previewGenerator;
             _userService = userService;
             _logger = logger;
+            _archiverService = archiverService;
         }
 
         public List<PendingFile> Files { get; set; } = new();
@@ -70,6 +72,7 @@ namespace Siphon.Pages
                     // We call MoveFile here. Since _env is a singleton service, 
                     // it is safe to access even after the request ends.
                     MoveFile(currentFileName, currentTarget);
+                    _archiverService.ArchiveDownload(GetDownloadedFileUrl(fileName));
                 }
                 catch (Exception ex)
                 {
@@ -90,6 +93,7 @@ namespace Siphon.Pages
             Task.Run(() =>
             {
                 DeleteFileSet(currentFile);
+                _archiverService.RemoveDownloadArchive(GetDownloadedFileUrl(fileName));
             });
 
             return RedirectToPage();
