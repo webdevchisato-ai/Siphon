@@ -82,109 +82,123 @@ namespace Siphon.Services
 
         private void CleanupApprovedFiles(object state)
         {
-            _logger.LogInformation("Approved: Running retention cleanup.");
-            try
+            if (_userService.GetApprovedRetentionEnabled())
             {
-                int maxMinutes = _userService.GetApprovedRetentionMinutes();
-                if (maxMinutes <= 0) return;
-
-                var cutoffTime = DateTime.UtcNow.AddMinutes(-maxMinutes);
-
-                var configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "extra_dirs.json");
-                List<string> ApprovalDirectories = new List<string>();
-                if (System.IO.File.Exists(configPath))
+                _logger.LogInformation("Approved: Running retention cleanup.");
+                try
                 {
-                    try
+                    int maxMinutes = _userService.GetApprovedRetentionMinutes();
+                    if (maxMinutes <= 0) return;
+
+                    var cutoffTime = DateTime.UtcNow.AddMinutes(-maxMinutes);
+
+                    var configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "extra_dirs.json");
+                    List<string> ApprovalDirectories = new List<string>();
+                    if (System.IO.File.Exists(configPath))
                     {
-                        var json = System.IO.File.ReadAllText(configPath);
-                        var extras = JsonSerializer.Deserialize<List<string>>(json);
-                        if (extras != null)
+                        try
                         {
-                            // Prefix them so we know they go into "Extra_Approved"
-                            ApprovalDirectories.AddRange(extras.Select(d => $"Extra_Approved/{d}"));
+                            var json = System.IO.File.ReadAllText(configPath);
+                            var extras = JsonSerializer.Deserialize<List<string>>(json);
+                            if (extras != null)
+                            {
+                                // Prefix them so we know they go into "Extra_Approved"
+                                ApprovalDirectories.AddRange(extras.Select(d => $"Extra_Approved/{d}"));
+                            }
+                            ApprovalDirectories.Add("Approved");
                         }
-                        ApprovalDirectories.Add("Approved");
+                        catch { }
                     }
-                    catch { }
+
+                    foreach (var dir in ApprovalDirectories)
+                    {
+                        var approvedDir = Path.Combine(_env.WebRootPath, dir);
+                        if (!Directory.Exists(approvedDir)) continue;
+                        var files = new DirectoryInfo(approvedDir).GetFiles();
+                        foreach (var file in files)
+                        {
+                            if (file.CreationTimeUtc < cutoffTime)
+                            {
+                                _logger.LogInformation($"Retention Policy: Deleting old approved file {file.Name} from {dir} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
+                                try
+                                {
+                                    file.Delete();
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogError($"Failed to delete approved file {file.Name} from {dir}: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
                 }
-
-                foreach (var dir in ApprovalDirectories)
+                catch (Exception ex)
                 {
-                    var approvedDir = Path.Combine(_env.WebRootPath, dir);
-                    if (!Directory.Exists(approvedDir)) continue;
-                    var files = new DirectoryInfo(approvedDir).GetFiles();
-                    foreach (var file in files)
-                    {
-                        if (file.CreationTimeUtc < cutoffTime)
-                        {
-                            _logger.LogInformation($"Retention Policy: Deleting old approved file {file.Name} from {dir} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
-                            try
-                            {
-                                file.Delete();
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError($"Failed to delete approved file {file.Name} from {dir}: {ex.Message}");
-                            }
-                        }
-                    }
+                    _logger.LogError($"Approved: Retention Service Error: {ex.Message}");
                 }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError($"Approved: Retention Service Error: {ex.Message}");
+                _logger.LogInformation("Approved retention cleanup is disabled. Skipping.");
             }
         }
 
         private void CleanupPendingFiles(object state)
         {
-            _logger.LogInformation("Pending: Running retention cleanup.");
-            try
+            if (_userService.GetPendingRetentionEnabled())
             {
-                int maxMinutes = _userService.GetPreservationMinutes();
-                if (maxMinutes <= 0) return;
-
-                var pendingDir = Path.Combine(_env.WebRootPath, "Pending");
-                if (!Directory.Exists(pendingDir)) return;
-
-                var cutoffTime = DateTime.UtcNow.AddMinutes(-maxMinutes);
-
-                // Get only main video files
-                var files = new DirectoryInfo(pendingDir).GetFiles("*.mp4")
-                    .Where(f => !f.Name.EndsWith("_preview.mp4"));
-
-                foreach (var file in files)
+                _logger.LogInformation("Pending: Running retention cleanup.");
+                try
                 {
-                    if (file.CreationTimeUtc < cutoffTime)
+                    int maxMinutes = _userService.GetPreservationMinutes();
+                    if (maxMinutes <= 0) return;
+
+                    var pendingDir = Path.Combine(_env.WebRootPath, "Pending");
+                    if (!Directory.Exists(pendingDir)) return;
+
+                    var cutoffTime = DateTime.UtcNow.AddMinutes(-maxMinutes);
+
+                    // Get only main video files
+                    var files = new DirectoryInfo(pendingDir).GetFiles("*.mp4")
+                        .Where(f => !f.Name.EndsWith("_preview.mp4"));
+
+                    foreach (var file in files)
                     {
-                        _logger.LogInformation($"Retention Policy: Deleting old pending file {file.Name} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
-
-                        try
+                        if (file.CreationTimeUtc < cutoffTime)
                         {
-                            // Delete Main Video
-                            file.Delete();
+                            _logger.LogInformation($"Retention Policy: Deleting old pending file {file.Name} (Age: {DateTime.UtcNow - file.CreationTimeUtc})");
 
-                            // Delete Thumbnail
-                            string thumb = file.FullName.Replace(".mp4", "_preview.jpg");
-                            if (File.Exists(thumb)) File.Delete(thumb);
+                            try
+                            {
+                                // Delete Main Video
+                                file.Delete();
 
-                            // Delete Preview
-                            string preview = file.FullName.Replace(".mp4", "_preview.mp4");
-                            if (File.Exists(preview)) File.Delete(preview);
+                                // Delete Thumbnail
+                                string thumb = file.FullName.Replace(".mp4", "_preview.jpg");
+                                if (File.Exists(thumb)) File.Delete(thumb);
 
-                            string heatmap = file.FullName.Replace(".mp4", ".json");
-                            if (File.Exists(heatmap)) File.Delete(heatmap);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError($"Failed pending to delete {file.Name}: {ex.Message}");
+                                // Delete Preview
+                                string preview = file.FullName.Replace(".mp4", "_preview.mp4");
+                                if (File.Exists(preview)) File.Delete(preview);
+
+                                string heatmap = file.FullName.Replace(".mp4", ".json");
+                                if (File.Exists(heatmap)) File.Delete(heatmap);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError($"Failed pending to delete {file.Name}: {ex.Message}");
+                            }
                         }
                     }
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Pending: Retention Service Error: {ex.Message}");
+                }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogError($"Pending: Retention Service Error: {ex.Message}");
+                _logger.LogInformation("Pending retention cleanup is disabled. Skipping.");
             }
         }
 

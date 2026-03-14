@@ -38,6 +38,9 @@ namespace Siphon.Pages
         [BindProperty] public string DefaultApprovedDirName { get; set; }
         [BindProperty] public int CacheRetentionValue { get; set; }
         [BindProperty] public string CacheRetentionUnit { get; set; }
+        [BindProperty] public bool PendingRetentionEnabled { get; set; }
+        [BindProperty] public bool ApprovedRetentionEnabled { get; set; }
+        [BindProperty] public double HeatmapSensitivity { get; set; }
 
         public void OnGet()
         {
@@ -68,7 +71,10 @@ namespace Siphon.Pages
                 else { CacheRetentionValue = userConfig.cacheRetentionMinutes; CacheRetentionUnit = "Minutes"; }
 
                 generateHeatmap = userConfig.GenerateHeatmap;
+                PendingRetentionEnabled = userConfig.PendingRetentionEnabled;
+                ApprovedRetentionEnabled = userConfig.ApprovedRetentionEnabled;
                 DefaultApprovedDirName = userConfig.DefaultApprovedDirDisplayName;
+                HeatmapSensitivity = userConfig.heatmapSensitivity;
             }
 
             // 2. Load Existing Directories
@@ -117,7 +123,18 @@ namespace Siphon.Pages
             }
 
             // 2. Update User Config
-            _userService.UpdateConfiguration(Username, Password, minutes, approvedMinutes, generateHeatmap, DefaultApprovedDirName, cacheMinutes);
+            _userService.UpdateConfiguration(
+                Username, 
+                Password, 
+                minutes, 
+                approvedMinutes, 
+                generateHeatmap, 
+                DefaultApprovedDirName, 
+                cacheMinutes, 
+                PendingRetentionEnabled, 
+                ApprovedRetentionEnabled, 
+                HeatmapSensitivity
+            );
 
             // 3. Handle Directory Logic (Create New & Delete Removed)
 

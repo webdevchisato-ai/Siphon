@@ -52,9 +52,38 @@
                         <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Preferences</h6>
                         <div class="mb-4">
                             <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" role="switch" asp-for="generateHeatmap" />
+                                <input class="form-check-input" type="checkbox" role="switch" asp-for="generateHeatmap" id="generateHeatmap" />
                                 <label class="form-check-label fw-bold small" asp-for="generateHeatmap">
                                     Generate volume heatmaps for pending videos
+                                </label>
+                            </div>
+
+                            <div id="heatmapSensitivityContainer" class="d-none mb-4" style="padding-top:10px;">
+                                <label class="form-label fw-bold small" asp-for="HeatmapSensitivity" data-bs-toggle="tooltip" data-bs-placement="top" title="Higher values will make the heatmap more sensitive to quieter sounds, while lower values will only highlight louder sounds.">
+                                    Heatmap Sensitivity
+                                </label>
+                                <div class="row align-items-center">
+                                    <div class="col-sm-9">
+                                        <input class="form-range" type="range" min="0.1" max="10" step="0.1" id="heatmapRange" />
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <input type="number" class="form-control" step="0.1" asp-for="HeatmapSensitivity" id="HeatmapSensitivity" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            @*heatmap sensitivity will go here*@
+
+                            <div class="form-check form-switch" style="padding-top:10px;">
+                                <input class="form-check-input" type="checkbox" role="switch" asp-for="PendingRetentionEnabled" id="PendingRetentionEnabled" />
+                                <label class="form-check-label fw-bold small" asp-for="PendingRetentionEnabled">
+                                    Enabled Retention Policy for Pending Files
+                                </label>
+                            </div>
+                            <div class="form-check form-switch" style="padding-top:10px;">
+                                <input class="form-check-input" type="checkbox" role="switch" asp-for="ApprovedRetentionEnabled" id="ApprovedRetentionEnabled" />
+                                <label class="form-check-label fw-bold small" asp-for="ApprovedRetentionEnabled">
+                                    Enabled Retention Policy for Approved Files
                                 </label>
                             </div>
                         </div>
@@ -69,8 +98,9 @@
                             </div>
                         </div>
 
-                        <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Cleanup Policy</h6>
-                        <div class="row g-3 mb-4">
+                        <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Retention Policy</h6>
+
+                        <div id="pendingRetentionContainer" class="row g-3 mb-4 d-none">
                             <div class="col-md-6">
                                 <label class="form-label fw-bold small">Auto-Delete Pending Files After</label>
                                 <input type="number" class="form-control" asp-for="RetentionValue" min="1" />
@@ -88,7 +118,7 @@
                                 <small class="text-muted"><i class="bi bi-info-circle"></i> Files left in "Pending" longer than this duration will be automatically removed.</small>
                             </div>
                         </div>
-                        <div class="row g-3 mb-4">
+                        <div id="approvedRetentionContainer" class="row g-3 mb-4 d-none">
                             <div class="col-md-6">
                                 <label class="form-label fw-bold small">Auto-Delete Approved Files After</label>
                                 <input type="number" class="form-control" asp-for="ApprovedRetentionValue" min="1" />
@@ -176,4 +206,65 @@
         `;
         container.appendChild(div);
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        // --- Visibility Toggle Logic ---
+        function toggleVisibility(checkboxId, containerId) {
+            const checkbox = document.getElementById(checkboxId);
+            const container = document.getElementById(containerId);
+
+            if (!checkbox || !container) return;
+
+            const updateDisplay = () => {
+                if (checkbox.checked) {
+                    container.classList.remove('d-none');
+                } else {
+                    container.classList.add('d-none');
+                }
+            };
+
+            // Run once on load
+            updateDisplay();
+            // Listen for changes
+            checkbox.addEventListener('change', updateDisplay);
+        }
+
+        // Initialize visibility toggles
+        toggleVisibility('generateHeatmap', 'heatmapSensitivityContainer');
+        toggleVisibility('PendingRetentionEnabled', 'pendingRetentionContainer');
+        toggleVisibility('ApprovedRetentionEnabled', 'approvedRetentionContainer');
+
+
+        // --- Range Slider & Number Input Sync Logic ---
+        const rangeInput = document.getElementById('heatmapRange');
+        const numberInput = document.getElementById('HeatmapSensitivity');
+
+        if (rangeInput && numberInput) {
+            // 1. Set the initial position of the slider based on the number input's value.
+            // If the number input is empty or invalid, default to 1.0.
+            let initialVal = parseFloat(numberInput.value);
+            if (isNaN(initialVal)) {
+                initialVal = 1.0;
+                numberInput.value = initialVal; // Give the number box a starting value if it's null
+            }
+
+            // The slider will automatically clamp visually between its min (0.1) and max (10)
+            rangeInput.value = initialVal;
+
+            // 2. When the user moves the slider, update the number box
+            rangeInput.addEventListener('input', function () {
+                numberInput.value = this.value;
+            });
+
+            // 3. When the user types in the number box, update the slider
+            numberInput.addEventListener('input', function () {
+                let val = parseFloat(this.value);
+
+                // Only sync back to the slider if they typed a valid number
+                if (!isNaN(val)) {
+                    rangeInput.value = val;
+                }
+            });
+        }
+    });
 </script>
