@@ -66,7 +66,23 @@
                                         <span class="url-text text-truncate">@file.URL</span>
                                     </div>
                                 </td>
+
                                 <td class="pe-4 text-end">
+                                    <form method="post" asp-page-handler="ToggleArchiveStatus" class="d-inline">
+                                        <input type="hidden" name="url" value="@file.URL" />
+                                        <input type="hidden" name="p" value="@Model.P" />
+                                        @if (file.IsArchived){
+                                            <button type="submit" class="btn btn btn-success btn-sm" title="Toggle Status">
+                                                <i class="bi bi-arrow-bar-down"></i>
+                                            </button>
+                                        }
+                                        else
+                                        {
+                                            <button type="submit" class="btn btn-info btn-sm" title="Toggle Status">
+                                                <i class="bi bi-archive-fill"></i>
+                                            </button>
+                                        }
+                                        </form>
                                     <form method="post" asp-page-handler="Delete" onsubmit="return confirm('Are you sure you want to remove this record from the archive?');" class="d-inline">
                                         <input type="hidden" name="url" value="@file.URL" />
                                         <input type="hidden" name="p" value="@Model.P" />

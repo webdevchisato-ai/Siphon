@@ -145,6 +145,22 @@ namespace Siphon.Services
             return context.Downloaded.Any(d => d.URL == url && d.IsArchived);
         }
 
+        public void ToggleArchivedStatus(string url)
+        {
+            using var context = _dbFactory.CreateDbContext();
+            var record = context.Downloaded.FirstOrDefault(d => d.URL == url);
+            if (record != null)
+            {
+                record.IsArchived = !record.IsArchived;
+                context.SaveChanges();
+                _logger.LogInformation($"Changed archived status for {url} to {record.IsArchived}.");
+            }
+            else
+            {
+                _logger.LogWarning($"Could not find download record for {url} to change archived status.");
+            }
+        }
+
         public void SeedTestData(int count = 500)
         {
             using var context = _dbFactory.CreateDbContext();

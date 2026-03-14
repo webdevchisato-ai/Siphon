@@ -168,7 +168,7 @@ namespace Siphon.Services
                         _previewGenerator.QueueGeneration(job.FinalFilePath);
                     }
 
-                    AddURLToPendingFiles(job.Filename, job.Url);
+                    
                     long fileSize = 0;
                     bool sizeFound = false;
 
@@ -199,6 +199,7 @@ namespace Siphon.Services
                         }
                     }
                     _archiverService.AddDownload(job.Url, job.Filename, DateTime.UtcNow, fileSize);
+                    AddURLToPendingFiles(job.Filename, job.Url);
                 }
             }
             catch (OperationCanceledException)

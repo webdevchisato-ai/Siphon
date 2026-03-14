@@ -59,6 +59,16 @@ namespace Siphon.Pages
             return RedirectToPage(new { p = p });
         }
 
+        public IActionResult OnPostToggleArchiveStatus(string url, int p)
+        {
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                _archiverService.ToggleArchivedStatus(url);
+            }
+
+            return RedirectToPage(new { p = p });
+        }
+
         public string FormatBytes(long? bytes)
         {
             if (!bytes.HasValue) return "Unknown Size";
