@@ -17,12 +17,14 @@ namespace Siphon.Pages
         private readonly IWebHostEnvironment _env;
         private readonly ILogger<UploadModel> _logger;
         private readonly PreviewGenerator _previewGenerator;
+        private readonly ArchiverService _archiverService;
 
-        public UploadModel(IWebHostEnvironment environment, ILogger<UploadModel> logger, PreviewGenerator previewGenerator)
+        public UploadModel(IWebHostEnvironment environment, ILogger<UploadModel> logger, PreviewGenerator previewGenerator, ArchiverService archiverService)
         {
             _env = environment;
             _logger = logger;
             _previewGenerator = previewGenerator;
+            _archiverService = archiverService;
         }
 
         [BindProperty]
@@ -110,6 +112,8 @@ namespace Siphon.Pages
             // --- PART 5: Generate Preview ---
             _logger.LogInformation("Queueing preview generation...");
             _previewGenerator.QueueGeneration(finalFilePath);
+
+            _archiverService.AddDownload(TargetUrl, urlAssocFileName, DateTime.Now, new FileInfo(finalFilePath).Length);
 
             return RedirectToPage();
         }
