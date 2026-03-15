@@ -10,206 +10,187 @@
 @Html.AntiForgeryToken()
 
 <style>
-        .post-card {
-                transition: transform 0.2s;
-                cursor: context-menu;
-
+    .post-card {
+        transition: transform 0.2s;
+        cursor: context-menu;
     }
 
-            .post-card:hover {
-                    transform: translateY(-4px);
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-
-    }
+        .post-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
 
 
     /* Context Menu Styles */
-        #context-menu {
-                display: none;
-                position: fixed;
-                z-index: 9999;
-                background: #222;
-                border: 1px solid #444;
-                border-radius: 6px;
-                min-width: 160px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                padding: 5px 0;
-
+    #context-menu {
+        display: none;
+        position: fixed;
+        z-index: 9999;
+        background: #222;
+        border: 1px solid #444;
+        border-radius: 6px;
+        min-width: 160px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        padding: 5px 0;
     }
 
-                #context-menu button {
-                        text-align: left;
-                        width: 100%;
-                        background: none;
-                        border: none;
-                        padding: 8px 15px;
-                        color: #ddd;
-                        transition: background 0.1s;
-
+        #context-menu button {
+            text-align: left;
+            width: 100%;
+            background: none;
+            border: none;
+            padding: 8px 15px;
+            color: #ddd;
+            transition: background 0.1s;
         }
 
-                #context-menu button:hover {
-                        background: #333;
-                        color: #fff;
-
-    }
+            #context-menu button:hover {
+                background: #333;
+                color: #fff;
+            }
 
 
     /* Success Badge Animation */
-        .queued-badge {
-                display: none;
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(25, 135, 84, 0.85);
-                color: white;
-                z-index: 20;
-                align-items: center;
-                justify-content: center;
-                flex-direction: column;
-                backdrop-filter: blur(2px);
-                transition: opacity 0.3s ease;
-
+    .queued-badge {
+        display: none;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(25, 135, 84, 0.85);
+        color: white;
+        z-index: 20;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        backdrop-filter: blur(2px);
+        transition: opacity 0.3s ease;
     }
 
 
     /* Video Duration Badge */
-        .duration-badge {
-                position: absolute;
-                bottom: 8px;
-                right: 8px;
-                background: rgba(0, 0, 0, 0.75);
-                color: white;
-                padding: 2px 6px;
-                border-radius: 3px;
-                font-size: 0.75rem;
-                font-weight: bold;
-                backdrop-filter: blur(4px);
-
+    .duration-badge {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        background: rgba(0, 0, 0, 0.75);
+        color: white;
+        padding: 2px 6px;
+        border-radius: 3px;
+        font-size: 0.75rem;
+        font-weight: bold;
+        backdrop-filter: blur(4px);
     }
 
 
     /* Loading skeleton for images */
-        .img-loading {
-                background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
-                background-size: 200% 100%;
-                animation: loading 1.5s infinite;
-
+    .img-loading {
+        background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+        background-size: 200% 100%;
+        animation: loading 1.5s infinite;
     }
 
-        @@keyframes loading {
-                0% {
-                        background-position: 200% 0;
-
+    @@keyframes loading {
+        0% {
+            background-position: 200% 0;
         }
 
-                100% {
-                        background-position: -200% 0;
-
+        100% {
+            background-position: -200% 0;
         }
-
-
     }
 
 
     /* Range Slider Styles */
-        .dual-range-container {
-                position: relative;
-                height: 40px;
-                margin: 15px 0;
-
+    .dual-range-container {
+        position: relative;
+        height: 40px;
+        margin: 15px 0;
     }
 
-        .dual-range-slider {
-                position: relative;
-                width: 100%;
-                height: 6px;
-                background: #ddd;
-                border-radius: 3px;
-                margin-top: 17px;
-
+    .dual-range-slider {
+        position: relative;
+        width: 100%;
+        height: 6px;
+        background: #ddd;
+        border-radius: 3px;
+        margin-top: 17px;
     }
 
-        .dual-range-progress {
-                position: absolute;
-                height: 6px;
-                background: #0d6efd;
-                border-radius: 3px;
-
+    .dual-range-progress {
+        position: absolute;
+        height: 6px;
+        background: #0d6efd;
+        border-radius: 3px;
     }
 
-        .range-input {
-                position: absolute;
-                width: 100%;
-                height: 6px;
-                top: 17px;
-                background: none;
-                pointer-events: none;
-                -webkit-appearance: none;
-                -moz-appearance: none;
-                appearance: none;
-
+    .range-input {
+        position: absolute;
+        width: 100%;
+        height: 6px;
+        top: 17px;
+        background: none;
+        pointer-events: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
     }
 
-            .range-input::-webkit-slider-thumb {
-                    height: 18px;
-                    width: 18px;
-                    border-radius: 50%;
-                    background: #0d6efd;
-                    pointer-events: auto;
-                    -webkit-appearance: none;
-                    cursor: pointer;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        .range-input::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #0d6efd;
+            pointer-events: auto;
+            -webkit-appearance: none;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
 
+        .range-input::-moz-range-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: #0d6efd;
+            pointer-events: auto;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+    .range-values {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.75rem;
+        color: #666;
+        margin-top: 5px;
     }
 
-            .range-input::-moz-range-thumb {
-                    height: 18px;
-                    width: 18px;
-                    border-radius: 50%;
-                    background: #0d6efd;
-                    pointer-events: auto;
-                    cursor: pointer;
-                    border: 2px solid white;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-
+    .filter-disabled {
+        opacity: 0.5;
+        pointer-events: none;
     }
 
-        .range-values {
-                display: flex;
-                justify-content: space-between;
-                font-size: 0.75rem;
-                color: #666;
-                margin-top: 5px;
-
+    .video-length-inputs {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 8px;
     }
 
-        .filter-disabled {
-                opacity: 0.5;
-                pointer-events: none;
-
-    }
-
-        .video-length-inputs {
-                display: flex;
-                gap: 8px;
-                align-items: center;
-                margin-bottom: 8px;
-
-    }
-
-            .video-length-inputs input {
-                    flex: 1;
-                    text-align: center;
-
-    }
+        .video-length-inputs input {
+            flex: 1;
+            text-align: center;
+        }
 </style>
 
 <div class="container-fluid py-4">
     <div class="d-flex justify-content-end mb-3 gap-2">
+        <button class="btn btn-outline-danger btn-sm" type="button" data-bs-toggle="modal" data-bs-target="#redditRegistryModal" onclick="loadSubredditRegistry()">
+            <i class="bi bi-reddit"></i> Reddit Registry
+        </button>
         <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#settingsPanel" aria-expanded="false">
             <i class="bi bi-gear-fill"></i> Scraper Settings
         </button>
@@ -264,7 +245,7 @@
                         <input type="text" class="form-control" asp-for="_rule34ApiKey" placeholder="Rule34 API Key..." />
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small text-muted">"reddit_session"" Cookie (Reddit)</label>
+                        <label class="form-label small text-muted">"reddit_session" Cookie (Reddit)</label>
                         <input type="text" class="form-control" asp-for="_redditCookie" placeholder="Reddit Session..." />
                     </div>
 
@@ -303,6 +284,7 @@
                                 <option value="kemono.cr">Kemono.cr</option>
                                 <option value="coomer.st">Coomer.st</option>
                                 <option value="rule34.xxx">Rule34.xxx</option>
+                                <option value="reddit.com">Reddit.com</option>
                             </select>
                         </div>
 
@@ -320,6 +302,7 @@
                                 <option value="onlyfans" data-site="coomer.st">OnlyFans</option>
                                 <option value="fansly" data-site="coomer.st">Fansly</option>
                                 <option value="candfans" data-site="coomer.st">CandFans</option>
+                                <option value="reddit" data-site="reddit.com">Reddit (Subreddit)</option>
                             </select>
                             <small class="text-muted" style="font-size: 0.7em;">Select a service to find a specific User ID.</small>
                         </div>
@@ -327,6 +310,9 @@
                         <div class="mb-3">
                             <label class="form-label small fw-bold">User ID or Name</label>
                             <input asp-for="SearchUser" id="SearchUser" class="form-control form-control-sm" placeholder="e.g. 3295915" />
+                            <select id="redditSubredditSelect" class="form-select form-select-sm" style="display: none;" onchange="document.getElementById('SearchUser').value = this.value;">
+                                <option value="">-- Select Subreddit --</option>
+                            </select>
                         </div>
 
                         <div class="mb-3 artist-specific-filter" style="display: none;">
@@ -343,563 +329,791 @@
                         <div class="post-specific-filter" style="display: none;">
                             <div class="mb-3 form-check form-switch">
                                 <input class="form-check-input" type="checkbox" asp-for="OnlyVideos" id="onlyVideosCheck">
-                                <label class="form-check-label small">Only Videos</label>
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label small fw-bold">Min Attachments</label>
-                                <input type="number" asp-for="MinAttachments" class="form-control form-control-sm" min="0" />
-                            </div>
-
-                            <hr class="my-3" />
-
-                            <div class="mb-3">
-                                <div class="form-check form-switch mb-2">
-                                    <input class="form-check-input" type="checkbox" asp-for="EnableVideoLengthFilter" id="videoLengthToggle">
-                                    <label class="form-check-label small fw-bold">Video Length Filter</label>
+                                    <label class="form-check-label small">Only Videos</label>
                                 </div>
 
-                                <div id="videoLengthFilterContent" class="@(Model.EnableVideoLengthFilter ? "" : "filter-disabled")">
-                                    <div class="video-length-inputs">
-                                        <input type="number" asp-for="MinVideoLength" id="minVideoLength" class="form-control form-control-sm" min="0" max="10000" />
-                                        <span class="small">to</span>
-                                        <input type="number" asp-for="MaxVideoLength" id="maxVideoLength" class="form-control form-control-sm" min="0" max="10000" />
-                                    </div>
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold">Min Attachments</label>
+                                    <input type="number" asp-for="MinAttachments" class="form-control form-control-sm" min="0" />
+                                </div>
 
-                                    <div class="dual-range-container">
-                                        <div class="dual-range-slider">
-                                            <div class="dual-range-progress" id="rangeProgress"></div>
+                                <hr class="my-3" />
+
+                                <div class="mb-3">
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" asp-for="EnableVideoLengthFilter" id="videoLengthToggle">
+                                            <label class="form-check-label small fw-bold">Video Length Filter</label>
                                         </div>
-                                        <input type="range" min="0" max="10000" value="@Model.MinVideoLength" id="rangeMin" class="range-input" />
-                                        <input type="range" min="0" max="10000" value="@Model.MaxVideoLength" id="rangeMax" class="range-input" />
-                                    </div>
 
-                                    <div class="range-values">
-                                        <span id="minDisplay">0s</span>
-                                        <span id="maxDisplay">2h 46m</span>
+                                        <div id="videoLengthFilterContent" class="@(Model.EnableVideoLengthFilter ? "" : "filter-disabled")">
+                                            <div class="video-length-inputs">
+                                                <input type="number" asp-for="MinVideoLength" id="minVideoLength" class="form-control form-control-sm" min="0" max="10000" />
+                                                <span class="small">to</span>
+                                                <input type="number" asp-for="MaxVideoLength" id="maxVideoLength" class="form-control form-control-sm" min="0" max="10000" />
+                                            </div>
+
+                                            <div class="dual-range-container">
+                                                <div class="dual-range-slider">
+                                                    <div class="dual-range-progress" id="rangeProgress"></div>
+                                                </div>
+                                                <input type="range" min="0" max="10000" value="@Model.MinVideoLength" id="rangeMin" class="range-input" />
+                                                <input type="range" min="0" max="10000" value="@Model.MaxVideoLength" id="rangeMax" class="range-input" />
+                                            </div>
+
+                                            <div class="range-values">
+                                                <span id="minDisplay">0s</span>
+                                                <span id="maxDisplay">2h 46m</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
+
+                                <button type="submit" class="btn btn-primary btn-sm w-100" onclick="document.getElementById('Offset').value='0';">Apply Filters</button>
+                                <a href="/ExternalIntegrations" class="btn btn-outline-secondary btn-sm w-100 mt-2">Reset</a>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-9 col-lg-10">
+
+                    <div id="statusAlert" class="alert d-flex align-items-center shadow" role="alert" style="display: none; position: fixed; bottom: 30px; right: 30px; z-index: 9999; min-width: 300px;">
+                        <i id="statusIcon" class="bi flex-shrink-0 me-3 fs-3"></i>
+                        <div>
+                            <strong id="statusHeader" class="d-block"></strong>
+                            <div class="small" id="statusMessage"></div>
+                        </div>
+                    </div>
+
+                    <div id="resultsContainer">
+                        @if (Model.SearchTriggered)
+                        {
+                            <div class="text-center py-5">
+                                <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+                                <p class="mt-3 text-muted">Starting search stream...</p>
                             </div>
+                        }
+                        else
+                        {
+                            <div class="text-center py-5">
+                                <div class="mb-3"><i class="bi bi-search text-secondary" style="font-size: 4rem;"></i></div>
+                                <h4 class="fw-bold text-muted">Discovery Mode</h4>
+                                <p class="text-muted">Select a site and apply filters to start browsing.</p>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-center my-5 gap-2" id="paginationControls" style="display: none;">
+                        <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
+                               class="btn btn-outline-dark px-4" id="btnLoadPrev">
+                            <i class="bi bi-arrow-left"></i> Previous
+                        </a>
+
+                        <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
+                               class="btn btn-dark px-4" id="btnLoadMore">
+                            Load More <i class="bi bi-arrow-right"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="context-menu"></div>
+
+        <div class="modal fade" id="redditRegistryModal" tabindex="-1" aria-labelledby="redditRegistryModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="redditRegistryModalLabel"><i class="bi bi-reddit text-danger"></i> Subreddit Registry</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+        
+                        <form id="addRedditForm" class="mb-4 p-3 bg-light rounded border">
+                            <h6>Add Subreddit by URL</h6>
+                            <div class="input-group">
+                                <input type="text" id="redditUrlInput" class="form-control" placeholder="e.g. https://www.reddit.com/r/YuriHentai/" required>
+                                <button class="btn btn-primary" type="submit" id="btnAddSubreddit">Add</button>
+                            </div>
+                            <small class="text-muted">The system will automatically extract the name.</small>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Subreddit Name</th>
+                                        <th>Extracted ID</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="redditRegistryTableBody">
+                                </tbody>
+                            </table>
                         </div>
 
-                        <button type="submit" class="btn btn-primary btn-sm w-100" onclick="document.getElementById('Offset').value='0';">Apply Filters</button>
-                        <a href="/ExternalIntegrations" class="btn btn-outline-secondary btn-sm w-100 mt-2">Reset</a>
-                    </form>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-9 col-lg-10">
-
-            <div id="statusAlert" class="alert d-flex align-items-center shadow" role="alert" style="display: none; position: fixed; bottom: 30px; right: 30px; z-index: 9999; min-width: 300px;">
-                <i id="statusIcon" class="bi flex-shrink-0 me-3 fs-3"></i>
-                <div>
-                    <strong id="statusHeader" class="d-block"></strong>
-                    <div class="small" id="statusMessage"></div>
+        <div class="modal fade" id="editRedditModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Edit Subreddit</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <input type="hidden" id="editRedditId" />
+                        <div class="mb-3">
+                            <label class="form-label">Display Name</label>
+                            <input type="text" class="form-control" id="editRedditName">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Subreddit ID (e.g. YuriHentai)</label>
+                            <input type="text" class="form-control" id="editRedditSub">
+                        </div>
+                        <button class="btn btn-success w-100" onclick="saveRedditEdit()">Save Changes</button>
+                    </div>
                 </div>
             </div>
-
-            <div id="resultsContainer">
-                @if (Model.SearchTriggered)
-                {
-                    <div class="text-center py-5">
-                        <div class="spinner-grow text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
-                        <p class="mt-3 text-muted">Starting search stream...</p>
-                    </div>
-                }
-                else
-                {
-                    <div class="text-center py-5">
-                        <div class="mb-3"><i class="bi bi-search text-secondary" style="font-size: 4rem;"></i></div>
-                        <h4 class="fw-bold text-muted">Discovery Mode</h4>
-                        <p class="text-muted">Select a site and apply filters to start browsing.</p>
-                    </div>
-                }
-            </div>
-
-            <div class="d-flex justify-content-center my-5 gap-2" id="paginationControls" style="display: none;">
-                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
-                             class="btn btn-outline-dark px-4" id="btnLoadPrev">
-                    <i class="bi bi-arrow-left"></i> Previous
-                </a>
-
-                <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
-                             class="btn btn-dark px-4" id="btnLoadMore">
-                    Load More <i class="bi bi-arrow-right"></i>
-                </a>
-            </div>
         </div>
-    </div>
-</div>
 
-<div id="context-menu"></div>
+        <script>
+            // --- 0. DYNAMIC FILTER VISIBILITY ---
+            const viewModeSelect = document.getElementById('viewModeSelect');
+            const artistFilters = document.querySelectorAll('.artist-specific-filter');
+            const postFilters = document.querySelectorAll('.post-specific-filter');
+            const siteSelect = document.getElementById('siteSelect');
+            const serviceSelect = document.getElementById('serviceSelect');
 
-<script>
-    // --- 0. DYNAMIC FILTER VISIBILITY ---
-    const viewModeSelect = document.getElementById('viewModeSelect');
-    const artistFilters = document.querySelectorAll('.artist-specific-filter');
-    const postFilters = document.querySelectorAll('.post-specific-filter');
+            function toggleFilters() {
+                const isArtists = viewModeSelect.value === 'artists';
+                artistFilters.forEach(el => el.style.display = isArtists ? 'block' : 'none');
+                postFilters.forEach(el => el.style.display = isArtists ? 'none' : 'block');
+            }
 
-    function toggleFilters() {
-        const isArtists = viewModeSelect.value === 'artists';
-        artistFilters.forEach(el => el.style.display = isArtists ? 'block' : 'none');
-        postFilters.forEach(el => el.style.display = isArtists ? 'none' : 'block');
-    }
+            function updateServiceOptions() {
+                const selectedSite = siteSelect.value;
+                const allOptions = serviceSelect.querySelectorAll('option');
 
-    viewModeSelect.addEventListener('change', toggleFilters);
-    document.addEventListener('DOMContentLoaded', toggleFilters);
-
-    // --- 1. STREAMING LOGIC (BUFFERED) ---
-    document.addEventListener('DOMContentLoaded', () => {
-        const searchTriggered = @(Model.SearchTriggered.ToString().ToLower());
-        if (searchTriggered) {
-            initiateStream();
-        }
-    });
-
-    async function initiateStream() {
-        const statusAlert = document.getElementById('statusAlert');
-        const statusHeader = document.getElementById('statusHeader');
-        const statusMessage = document.getElementById('statusMessage');
-        const statusIcon = document.getElementById('statusIcon');
-        const resultsContainer = document.getElementById('resultsContainer');
-        const paginationControls = document.getElementById('paginationControls');
-
-        // Initial UI State
-        statusAlert.style.display = 'flex';
-        statusAlert.style.opacity = '1'; // Ensure opacity is reset
-        statusAlert.className = 'alert alert-info d-flex align-items-center shadow';
-        statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-3 fs-3';
-        statusHeader.innerText = "Processing";
-        statusMessage.innerText = "Initializing connection...";
-
-        const params = new URLSearchParams(window.location.search);
-
-        try {
-            const response = await fetch(`?handler=StreamSearch&${params.toString()}`);
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                // Decode and append new chunk
-                buffer += decoder.decode(value, { stream: true });
-
-                // Split by SSE delimiter (double newline)
-                let parts = buffer.split('\n\n');
-
-                // Keep incomplete part in buffer
-                buffer = parts.pop();
-
-                for (const part of parts) {
-                    if (part.trim().startsWith('data: ')) {
-                         processMessage(part.trim(), statusAlert, statusHeader, statusMessage, statusIcon, resultsContainer, paginationControls);
+                allOptions.forEach(option => {
+                    if (option.value === 'all') {
+                        option.style.display = 'block';
+                        return;
                     }
+                    const optionSite = option.getAttribute('data-site');
+                    if (optionSite === selectedSite) {
+                        option.style.display = 'block';
+                    } else {
+                        option.style.display = 'none';
+                        if (option.selected) serviceSelect.value = 'all';
+                    }
+                });
+            }
+
+            function updateSearchLabels() {
+                const selectedSite = siteSelect.value;
+                const searchInput = document.getElementById('SearchUser');
+                const searchLabel = searchInput.previousElementSibling;
+                const redditSelect = document.getElementById('redditSubredditSelect');
+
+                if (selectedSite === 'rule34.xxx') {
+                    searchLabel.innerText = "Tags (Space separated)";
+                    searchInput.placeholder = "e.g. animated high_res";
+                    searchInput.style.display = 'block';
+                    redditSelect.style.display = 'none';
+                } else if (selectedSite === 'reddit.com') {
+                    searchLabel.innerText = "Select Subreddit";
+                    searchInput.style.display = 'none';
+                    redditSelect.style.display = 'block';
+                    populateRedditDropdown();
+                } else {
+                    searchLabel.innerText = "User ID or Name";
+                    searchInput.placeholder = "e.g. 3295915";
+                    searchInput.style.display = 'block';
+                    redditSelect.style.display = 'none';
                 }
             }
-        } catch (err) {
-            statusAlert.className = 'alert alert-danger d-flex align-items-center shadow';
-            statusMessage.innerText = "Connection failed: " + err.message;
-            console.error(err);
-        }
-    }
 
-    function processMessage(line, statusAlert, statusHeader, statusMessage, statusIcon, resultsContainer, paginationControls) {
-        try {
-            const jsonStr = line.replace('data: ', '');
-            const data = JSON.parse(jsonStr);
+            viewModeSelect.addEventListener('change', toggleFilters);
+    
+            // Updated Site Select Event Listener to force Reddit settings
+            siteSelect.addEventListener('change', () => {
+                if (siteSelect.value === 'reddit.com') {
+                    viewModeSelect.value = 'posts';
+                    serviceSelect.value = 'reddit';
+                    toggleFilters();
+                }
+                updateServiceOptions();
+                updateSearchLabels();
+            });
 
-            if (data.type === 'status') {
-                statusMessage.innerText = data.payload;
-            } else if (data.type === 'metaOffset') {
-                // HANDLE DYNAMIC OFFSET UPDATE
-                const meta = JSON.parse(data.payload);
-                updatePaginationLinks(meta.nextOffset);
-            } else if (data.type === 'error') {
-                statusAlert.className = 'alert alert-danger d-flex align-items-center shadow';
-                statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-3 fs-3';
-                statusHeader.innerText = "Error";
-                statusMessage.innerText = data.payload;
-            } else if (data.type === 'warning') {
-                statusAlert.className = 'alert alert-warning d-flex align-items-center shadow';
-                statusIcon.className = 'bi bi-exclamation-circle-fill flex-shrink-0 me-3 fs-3';
-                statusHeader.innerText = "Warning";
-                statusMessage.innerText = data.payload;
-            } else if (data.type === 'result') {
-                resultsContainer.innerHTML = data.payload;
-                reinitLazyLoading();
-                paginationControls.style.display = 'flex';
+            document.addEventListener('DOMContentLoaded', () => {
+                toggleFilters();
+                updateServiceOptions();
+                updateSearchLabels();
+        
+                // Ensure Reddit dropdown gets populated on load if Reddit is already selected
+                if(siteSelect.value === 'reddit.com') {
+                    populateRedditDropdown();
+                }
+            });
 
-                // Show Success State
-                statusAlert.className = 'alert alert-success d-flex align-items-center shadow';
-                statusIcon.className = 'bi bi-check-circle-fill flex-shrink-0 me-3 fs-3';
-                statusHeader.innerText = "Complete";
-                statusMessage.innerText = "Loaded successfully.";
+            // --- 1. REDDIT REGISTRY LOGIC ---
+            function getVerificationToken() {
+                const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
+                return tokenInput ? tokenInput.value : '';
+            }
 
-                // Fade out after 2 seconds
-                setTimeout(() => {
-                    statusAlert.style.transition = "opacity 0.5s ease";
-                    statusAlert.style.opacity = "0";
-                    setTimeout(() => {
-                        statusAlert.style.display = 'none';
-                    }, 500);
-                }, 2000);
-            } else if (data.type === 'info') {
+            async function loadSubredditRegistry() {
+                const tbody = document.getElementById('redditRegistryTableBody');
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+        
+                try {
+                    const res = await fetch('?handler=SubredditRegistry');
+                    if(res.ok) {
+                        const subs = await res.json();
+                        renderSubredditTable(subs);
+                    }
+                } catch(e) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-danger text-center">Failed to load registry.</td></tr>';
+                }
+            }
+
+            function renderSubredditTable(subs) {
+                const tbody = document.getElementById('redditRegistryTableBody');
+                tbody.innerHTML = '';
+        
+                if(subs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No subreddits registered yet.</td></tr>';
+                    return;
+                }
+
+                subs.forEach(s => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="fw-bold">${s.name}</td>
+                        <td class="text-muted">r/${s.subredditName}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary me-1" onclick="openEditRedditModal('${s.id}', '${s.name.replace(/'/g, "\\'")}', '${s.subredditName}')"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteSubreddit('${s.id}')"><i class="bi bi-trash"></i></button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+
+            async function populateRedditDropdown() {
+                const select = document.getElementById('redditSubredditSelect');
+                const currentVal = document.getElementById('SearchUser').value;
+        
+                try {
+                    const res = await fetch('?handler=SubredditRegistry');
+                    if(res.ok) {
+                        const subs = await res.json();
+                        select.innerHTML = '<option value="">-- Select Subreddit --</option>';
+                        subs.forEach(s => {
+                            const opt = document.createElement('option');
+                            opt.value = s.subredditName;
+                            opt.textContent = `${s.name} (r/${s.subredditName})`;
+                            if(s.subredditName === currentVal) opt.selected = true;
+                            select.appendChild(opt);
+                        });
+                
+                        if(!select.value && subs.length > 0) {
+                            select.value = subs[0].subredditName;
+                            document.getElementById('SearchUser').value = subs[0].subredditName;
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            document.getElementById('addRedditForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const urlInput = document.getElementById('redditUrlInput');
+                const btn = document.getElementById('btnAddSubreddit');
+        
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        
+                try {
+                    const res = await fetch('?handler=AddSubreddit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': getVerificationToken()
+                        },
+                        body: JSON.stringify({ url: urlInput.value })
+                    });
+            
+                    if(res.ok) {
+                        urlInput.value = '';
+                        await loadSubredditRegistry();
+                        if(siteSelect.value === 'reddit.com') populateRedditDropdown();
+                    } else {
+                        const err = await res.json();
+                        alert(err.message || 'Failed to add subreddit');
+                    }
+                } catch(e) {
+                    alert('Network error adding subreddit');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Add';
+                }
+            });
+
+            async function deleteSubreddit(id) {
+                if(!confirm("Remove this subreddit from the registry?")) return;
+        
+                try {
+                    const res = await fetch('?handler=DeleteSubreddit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': getVerificationToken()
+                        },
+                        body: JSON.stringify({ id: id })
+                    });
+                    if(res.ok) {
+                        await loadSubredditRegistry();
+                        if(siteSelect.value === 'reddit.com') populateRedditDropdown();
+                    }
+                } catch(e) { alert('Error deleting.'); }
+            }
+
+            function openEditRedditModal(id, name, sub) {
+                document.getElementById('editRedditId').value = id;
+                document.getElementById('editRedditName').value = name;
+                document.getElementById('editRedditSub').value = sub;
+                var myModal = new bootstrap.Modal(document.getElementById('editRedditModal'));
+                myModal.show();
+            }
+
+            async function saveRedditEdit() {
+                const id = document.getElementById('editRedditId').value;
+                const name = document.getElementById('editRedditName').value;
+                const sub = document.getElementById('editRedditSub').value;
+        
+                try {
+                    const res = await fetch('?handler=EditSubreddit', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'RequestVerificationToken': getVerificationToken()
+                        },
+                        body: JSON.stringify({ id: id, name: name, subredditName: sub })
+                    });
+                    if(res.ok) {
+                        bootstrap.Modal.getInstance(document.getElementById('editRedditModal')).hide();
+                        await loadSubredditRegistry();
+                        if(siteSelect.value === 'reddit.com') populateRedditDropdown();
+                    }
+                } catch(e) { alert('Error saving edit.'); }
+            }
+
+
+            // --- 2. STREAMING LOGIC (BUFFERED) ---
+            document.addEventListener('DOMContentLoaded', () => {
+                const searchTriggered = @(Model.SearchTriggered.ToString().ToLower());
+                if (searchTriggered) {
+                    initiateStream();
+                }
+            });
+
+            async function initiateStream() {
+                const statusAlert = document.getElementById('statusAlert');
+                const statusHeader = document.getElementById('statusHeader');
+                const statusMessage = document.getElementById('statusMessage');
+                const statusIcon = document.getElementById('statusIcon');
+                const resultsContainer = document.getElementById('resultsContainer');
+                const paginationControls = document.getElementById('paginationControls');
+
+                // Initial UI State
+                statusAlert.style.display = 'flex';
+                statusAlert.style.opacity = '1';
                 statusAlert.className = 'alert alert-info d-flex align-items-center shadow';
                 statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-3 fs-3';
-                statusHeader.innerText = "Info";
-                statusMessage.innerText = data.payload;
-            }
+                statusHeader.innerText = "Processing";
+                statusMessage.innerText = "Initializing connection...";
 
-        } catch (e) {
-            console.error("Parse error:", e);
-        }
-    }
+                const params = new URLSearchParams(window.location.search);
 
-    // Helper to update the Load More button href
-    function updatePaginationLinks(newNextOffset) {
-        const btnMore = document.getElementById('btnLoadMore');
-        if (btnMore) {
-            const url = new URL(btnMore.href);
-            url.searchParams.set("Offset", newNextOffset);
-            btnMore.href = url.toString();
-        }
-    }
+                try {
+                    const response = await fetch(`?handler=StreamSearch&${params.toString()}`);
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
 
-    // --- 2. CONTEXT MENU LOGIC ---
-    let activeUrl = "";
-    let activeCard = null;
-    const menu = document.getElementById('context-menu');
+                    let buffer = '';
 
-    document.addEventListener('click', () => menu.style.display = 'none');
-    document.addEventListener('scroll', () => menu.style.display = 'none');
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
 
-    function showContextMenu(e, type, url, el, id, service) {
-        e.preventDefault();
-        e.stopPropagation();
+                        // Decode and append new chunk
+                        buffer += decoder.decode(value, { stream: true });
 
-        activeUrl = url;
-        activeCard = el;
+                        // Split by SSE delimiter (double newline)
+                        let parts = buffer.split('\n\n');
 
-        menu.innerHTML = ''; // clear
+                        // Keep incomplete part in buffer
+                        buffer = parts.pop();
 
-        if (type === 'artist') {
-            menu.innerHTML += `<button onclick="showPostsForArtist('${id}', '${service}')"><i class="bi bi-collection me-2"></i> Show Posts</button>`;
-            menu.innerHTML += `<button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>`;
-            menu.innerHTML += `<button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>`;
-        } else {
-            menu.innerHTML += `<button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>`;
-            menu.innerHTML += `<button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>`;
-            menu.innerHTML += `<button onclick="downloadLink()"><i class="bi bi-download me-2"></i> Download</button>`;
-        }
-
-        let x = e.clientX;
-        let y = e.clientY;
-
-        if (x + 160 > window.innerWidth) x -= 160;
-        if (y + 120 > window.innerHeight) y -= 120;
-
-        menu.style.display = 'block';
-        menu.style.left = `${x}px`;
-        menu.style.top = `${y}px`;
-    }
-
-    function showPostsForArtist(id, service) {
-        document.getElementById('viewModeSelect').value = 'posts';
-        document.getElementById('serviceSelect').value = service;
-        document.getElementById('SearchUser').value = id;
-        document.getElementById('ArtistOffset').value = document.getElementById('Offset').value;
-        document.getElementById('ReturnToArtists').value = 'true';
-        document.getElementById('Offset').value = '0';
-        document.getElementById('filterForm').submit();
-    }
-
-    function backToArtists() {
-        document.getElementById('viewModeSelect').value = 'artists';
-        document.getElementById('SearchUser').value = '';
-        document.getElementById('Offset').value = document.getElementById('ArtistOffset').value;
-        document.getElementById('ReturnToArtists').value = 'false';
-        document.getElementById('filterForm').submit();
-    }
-
-    function openLink() { window.open(activeUrl, '_blank'); }
-
-    function copyLink() {
-        navigator.clipboard.writeText(activeUrl);
-    }
-
-    async function downloadLink() {
-        const tokenInput = document.querySelector('input[name="__RequestVerificationToken"]');
-        if (!tokenInput) {
-            alert('Error: Anti-Forgery Token not found on page.');
-            return;
-        }
-        const token = tokenInput.value;
-
-        try {
-            const response = await fetch(`?handler=Download&url=${encodeURIComponent(activeUrl)}`, {
-                method: 'POST',
-                headers: { 'RequestVerificationToken': token }
-            });
-
-            if (response.ok) {
-                if (activeCard) {
-                    const badge = activeCard.querySelector('.queued-badge');
-                    if (badge) {
-                        badge.style.display = 'flex';
-                        setTimeout(() => { badge.style.display = 'none'; }, 3000);
+                        for (const part of parts) {
+                            if (part.trim().startsWith('data: ')) {
+                                 processMessage(part.trim(), statusAlert, statusHeader, statusMessage, statusIcon, resultsContainer, paginationControls);
+                            }
+                        }
                     }
+                } catch (err) {
+                    statusAlert.className = 'alert alert-danger d-flex align-items-center shadow';
+                    statusMessage.innerText = "Connection failed: " + err.message;
+                    console.error(err);
                 }
-            } else {
-                alert('Server returned error queuing download.');
             }
-        } catch (err) {
-            console.error(err);
-            alert('Failed to connect to server.');
-        }
-    }
 
-    // --- 3. FILTER & UI LOGIC ---
-    const siteSelect = document.getElementById('siteSelect');
-    const serviceSelect = document.getElementById('serviceSelect');
+            function processMessage(line, statusAlert, statusHeader, statusMessage, statusIcon, resultsContainer, paginationControls) {
+                try {
+                    const jsonStr = line.replace('data: ', '');
+                    const data = JSON.parse(jsonStr);
 
-    function updateServiceOptions() {
-        const selectedSite = siteSelect.value;
-        const allOptions = serviceSelect.querySelectorAll('option');
+                    if (data.type === 'status') {
+                        statusMessage.innerText = data.payload;
+                    } else if (data.type === 'metaOffset') {
+                        const meta = JSON.parse(data.payload);
+                        updatePaginationLinks(meta.nextOffset);
+                    } else if (data.type === 'error') {
+                        statusAlert.className = 'alert alert-danger d-flex align-items-center shadow';
+                        statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-3 fs-3';
+                        statusHeader.innerText = "Error";
+                        statusMessage.innerText = data.payload;
+                    } else if (data.type === 'warning') {
+                        statusAlert.className = 'alert alert-warning d-flex align-items-center shadow';
+                        statusIcon.className = 'bi bi-exclamation-circle-fill flex-shrink-0 me-3 fs-3';
+                        statusHeader.innerText = "Warning";
+                        statusMessage.innerText = data.payload;
+                    } else if (data.type === 'result') {
+                        resultsContainer.innerHTML = data.payload;
+                        reinitLazyLoading();
+                        paginationControls.style.display = 'flex';
 
-        allOptions.forEach(option => {
-            if (option.value === 'all') {
-                option.style.display = 'block';
-                return;
+                        statusAlert.className = 'alert alert-success d-flex align-items-center shadow';
+                        statusIcon.className = 'bi bi-check-circle-fill flex-shrink-0 me-3 fs-3';
+                        statusHeader.innerText = "Complete";
+                        statusMessage.innerText = "Loaded successfully.";
+
+                        setTimeout(() => {
+                            statusAlert.style.transition = "opacity 0.5s ease";
+                            statusAlert.style.opacity = "0";
+                            setTimeout(() => {
+                                statusAlert.style.display = 'none';
+                            }, 500);
+                        }, 2000);
+                    } else if (data.type === 'info') {
+                        statusAlert.className = 'alert alert-info d-flex align-items-center shadow';
+                        statusIcon.className = 'bi bi-info-circle-fill flex-shrink-0 me-3 fs-3';
+                        statusHeader.innerText = "Info";
+                        statusMessage.innerText = data.payload;
+                    }
+
+                } catch (e) {
+                    console.error("Parse error:", e);
+                }
             }
-            const optionSite = option.getAttribute('data-site');
-            if (optionSite === selectedSite) {
-                option.style.display = 'block';
-            } else {
-                option.style.display = 'none';
-                if (option.selected) serviceSelect.value = 'all';
+
+            function updatePaginationLinks(newNextOffset) {
+                const btnMore = document.getElementById('btnLoadMore');
+                if (btnMore) {
+                    const url = new URL(btnMore.href);
+                    url.searchParams.set("Offset", newNextOffset);
+                    btnMore.href = url.toString();
+                }
             }
-        });
-    }
 
-    function updateSearchLabels() {
-        const searchInput = document.getElementById('SearchUser');
-        const searchLabel = searchInput.previousElementSibling;
-        if (siteSelect.value === 'rule34.xxx') {
-            searchLabel.innerText = "Tags (Space separated)";
-            searchInput.placeholder = "e.g. animated high_res";
-        } else {
-            searchLabel.innerText = "User ID or Name";
-            searchInput.placeholder = "e.g. 3295915";
-        }
-    }
+            // --- 3. CONTEXT MENU LOGIC ---
+            let activeUrl = "";
+            let activeCard = null;
+            const menu = document.getElementById('context-menu');
 
-    document.addEventListener('DOMContentLoaded', () => {
-        updateServiceOptions();
-        updateSearchLabels();
-    });
+            document.addEventListener('click', () => menu.style.display = 'none');
+            document.addEventListener('scroll', () => menu.style.display = 'none');
 
-    siteSelect.addEventListener('change', () => {
-        updateServiceOptions();
-        updateSearchLabels();
-    });
+            function showContextMenu(e, type, url, el, id, service) {
+                e.preventDefault();
+                e.stopPropagation();
 
-    // --- 4. VIDEO SLIDER LOGIC ---
-    const rangeMin = document.getElementById('rangeMin');
-    const rangeMax = document.getElementById('rangeMax');
-    const minVideoLength = document.getElementById('minVideoLength');
-    const maxVideoLength = document.getElementById('maxVideoLength');
-    const rangeProgress = document.getElementById('rangeProgress');
-    const minDisplay = document.getElementById('minDisplay');
-    const maxDisplay = document.getElementById('maxDisplay');
-    const videoLengthToggle = document.getElementById('videoLengthToggle');
-    const videoLengthContent = document.getElementById('videoLengthFilterContent');
+                activeUrl = url;
+                activeCard = el;
 
-    function formatTime(seconds) {
-        if (seconds < 60) return `${seconds}s`;
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        if (mins < 60) {
-            return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
-        }
-        const hours = Math.floor(mins / 60);
-        const remainMins = mins % 60;
-        return remainMins > 0 ? `${hours}h ${remainMins}m` : `${hours}h`;
-    }
+                menu.innerHTML = '';
 
-    function updateProgress() {
-        const min = parseInt(rangeMin.value);
-        const max = parseInt(rangeMax.value);
-        const percentMin = (min / 10000) * 100;
-        const percentMax = (max / 10000) * 100;
+                if (type === 'artist') {
+                    menu.innerHTML += `<button onclick="showPostsForArtist('${id}', '${service}')"><i class="bi bi-collection me-2"></i> Show Posts</button>`;
+                    menu.innerHTML += `<button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>`;
+                    menu.innerHTML += `<button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>`;
+                } else {
+                    menu.innerHTML += `<button onclick="openLink()"><i class="bi bi-box-arrow-up-right me-2"></i> Open Site</button>`;
+                    menu.innerHTML += `<button onclick="copyLink()"><i class="bi bi-clipboard me-2"></i> Copy Link</button>`;
+                    menu.innerHTML += `<button onclick="downloadLink()"><i class="bi bi-download me-2"></i> Download</button>`;
+                }
 
-        rangeProgress.style.left = percentMin + '%';
-        rangeProgress.style.width = (percentMax - percentMin) + '%';
+                let x = e.clientX;
+                let y = e.clientY;
 
-        minDisplay.textContent = formatTime(min);
-        maxDisplay.textContent = formatTime(max);
-    }
+                if (x + 160 > window.innerWidth) x -= 160;
+                if (y + 120 > window.innerHeight) y -= 120;
 
-    function smartStep(value) {
-        if (value < 60) return 5;
-        if (value < 300) return 15;
-        if (value < 600) return 30;
-        if (value < 1800) return 60;
-        if (value < 3600) return 120;
-        return 300;
-    }
+                menu.style.display = 'block';
+                menu.style.left = `${x}px`;
+                menu.style.top = `${y}px`;
+            }
 
-    rangeMin.addEventListener('input', (e) => {
-        let value = parseInt(e.target.value);
-        const step = smartStep(value);
-        value = Math.round(value / step) * step;
-        if (value > parseInt(rangeMax.value) - step) value = parseInt(rangeMax.value) - step;
-        rangeMin.value = value;
-        minVideoLength.value = value;
-        updateProgress();
-    });
+            function showPostsForArtist(id, service) {
+                document.getElementById('viewModeSelect').value = 'posts';
+                document.getElementById('serviceSelect').value = service;
+                document.getElementById('SearchUser').value = id;
+                document.getElementById('ArtistOffset').value = document.getElementById('Offset').value;
+                document.getElementById('ReturnToArtists').value = 'true';
+                document.getElementById('Offset').value = '0';
+                document.getElementById('filterForm').submit();
+            }
 
-    rangeMax.addEventListener('input', (e) => {
-        let value = parseInt(e.target.value);
-        const step = smartStep(value);
-        value = Math.round(value / step) * step;
-        if (value < parseInt(rangeMin.value) + step) value = parseInt(rangeMin.value) + step;
-        rangeMax.value = value;
-        maxVideoLength.value = value;
-        updateProgress();
-    });
+            function backToArtists() {
+                document.getElementById('viewModeSelect').value = 'artists';
+                document.getElementById('SearchUser').value = '';
+                document.getElementById('Offset').value = document.getElementById('ArtistOffset').value;
+                document.getElementById('ReturnToArtists').value = 'false';
+                document.getElementById('filterForm').submit();
+            }
 
-    minVideoLength.addEventListener('input', (e) => {
-        let value = parseInt(e.target.value) || 0;
-        if (value < 0) value = 0;
-        if (value > 10000) value = 10000;
-        if (value >= parseInt(maxVideoLength.value)) value = parseInt(maxVideoLength.value) - 1;
-        rangeMin.value = value;
-        minVideoLength.value = value;
-        updateProgress();
-    });
+            function openLink() { window.open(activeUrl, '_blank'); }
 
-    maxVideoLength.addEventListener('input', (e) => {
-        let value = parseInt(e.target.value) || 10000;
-        if (value < 0) value = 0;
-        if (value > 10000) value = 10000;
-        if (value <= parseInt(minVideoLength.value)) value = parseInt(minVideoLength.value) + 1;
-        rangeMax.value = value;
-        maxVideoLength.value = value;
-        updateProgress();
-    });
+            function copyLink() {
+                navigator.clipboard.writeText(activeUrl);
+            }
 
-    videoLengthToggle.addEventListener('change', (e) => {
-        if (e.target.checked) videoLengthContent.classList.remove('filter-disabled');
-        else videoLengthContent.classList.add('filter-disabled');
-    });
+            async function downloadLink() {
+                const token = getVerificationToken();
+                if (!token) {
+                    alert('Error: Anti-Forgery Token not found on page.');
+                    return;
+                }
 
-    updateProgress();
+                try {
+                    const response = await fetch(`?handler=Download&url=${encodeURIComponent(activeUrl)}`, {
+                        method: 'POST',
+                        headers: { 'RequestVerificationToken': token }
+                    });
 
-    // --- 5. PARALLEL IMAGE LOADER (20 Threads) ---
-    class ParallelImageLoader {
-        constructor(maxConcurrent = 20) {
-            this.maxConcurrent = maxConcurrent;
-            this.queue = [];
-            this.activeCount = 0;
-        }
+                    if (response.ok) {
+                        if (activeCard) {
+                            const badge = activeCard.querySelector('.queued-badge');
+                            if (badge) {
+                                badge.style.display = 'flex';
+                                setTimeout(() => { badge.style.display = 'none'; }, 3000);
+                            }
+                        }
+                    } else {
+                        alert('Server returned error queuing download.');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    alert('Failed to connect to server.');
+                }
+            }
 
-        async loadImage(img) {
-            return new Promise((resolve, reject) => {
-                this.queue.push({ img, resolve, reject });
-                this.processQueue();
+
+            // --- 4. VIDEO SLIDER LOGIC ---
+            const rangeMin = document.getElementById('rangeMin');
+            const rangeMax = document.getElementById('rangeMax');
+            const minVideoLength = document.getElementById('minVideoLength');
+            const maxVideoLength = document.getElementById('maxVideoLength');
+            const rangeProgress = document.getElementById('rangeProgress');
+            const minDisplay = document.getElementById('minDisplay');
+            const maxDisplay = document.getElementById('maxDisplay');
+            const videoLengthToggle = document.getElementById('videoLengthToggle');
+            const videoLengthContent = document.getElementById('videoLengthFilterContent');
+
+            function formatTime(seconds) {
+                if (seconds < 60) return `${seconds}s`;
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                if (mins < 60) {
+                    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`;
+                }
+                const hours = Math.floor(mins / 60);
+                const remainMins = mins % 60;
+                return remainMins > 0 ? `${hours}h ${remainMins}m` : `${hours}h`;
+            }
+
+            function updateProgress() {
+                const min = parseInt(rangeMin.value);
+                const max = parseInt(rangeMax.value);
+                const percentMin = (min / 10000) * 100;
+                const percentMax = (max / 10000) * 100;
+
+                rangeProgress.style.left = percentMin + '%';
+                rangeProgress.style.width = (percentMax - percentMin) + '%';
+
+                minDisplay.textContent = formatTime(min);
+                maxDisplay.textContent = formatTime(max);
+            }
+
+            function smartStep(value) {
+                if (value < 60) return 5;
+                if (value < 300) return 15;
+                if (value < 600) return 30;
+                if (value < 1800) return 60;
+                if (value < 3600) return 120;
+                return 300;
+            }
+
+            rangeMin.addEventListener('input', (e) => {
+                let value = parseInt(e.target.value);
+                const step = smartStep(value);
+                value = Math.round(value / step) * step;
+                if (value > parseInt(rangeMax.value) - step) value = parseInt(rangeMax.value) - step;
+                rangeMin.value = value;
+                minVideoLength.value = value;
+                updateProgress();
             });
-        }
 
-        async processQueue() {
-            while (this.activeCount < this.maxConcurrent && this.queue.length > 0) {
-                const { img, resolve, reject } = this.queue.shift();
-                this.activeCount++;
+            rangeMax.addEventListener('input', (e) => {
+                let value = parseInt(e.target.value);
+                const step = smartStep(value);
+                value = Math.round(value / step) * step;
+                if (value < parseInt(rangeMin.value) + step) value = parseInt(rangeMin.value) + step;
+                rangeMax.value = value;
+                maxVideoLength.value = value;
+                updateProgress();
+            });
 
-                const src = img.dataset.src;
-                const videoUrl = img.dataset.duration;
+            minVideoLength.addEventListener('input', (e) => {
+                let value = parseInt(e.target.value) || 0;
+                if (value < 0) value = 0;
+                if (value > 10000) value = 10000;
+                if (value >= parseInt(maxVideoLength.value)) value = parseInt(maxVideoLength.value) - 1;
+                rangeMin.value = value;
+                minVideoLength.value = value;
+                updateProgress();
+            });
 
-                const tempImg = new Image();
-                tempImg.onload = () => {
-                    img.src = src;
-                    img.classList.remove('img-loading');
-                    this.activeCount--;
-                    this.processQueue();
-                    resolve();
-                };
-                tempImg.onerror = () => {
-                    img.classList.remove('img-loading');
-                    this.activeCount--;
-                    this.processQueue();
-                    reject();
-                };
-                tempImg.src = src;
+            maxVideoLength.addEventListener('input', (e) => {
+                let value = parseInt(e.target.value) || 10000;
+                if (value < 0) value = 0;
+                if (value > 10000) value = 10000;
+                if (value <= parseInt(minVideoLength.value)) value = parseInt(minVideoLength.value) + 1;
+                rangeMax.value = value;
+                maxVideoLength.value = value;
+                updateProgress();
+            });
 
-                if (videoUrl && videoUrl !== "undefined" && videoUrl !== "") {
-                    this.fetchVideoDuration(img, videoUrl);
+            videoLengthToggle.addEventListener('change', (e) => {
+                if (e.target.checked) videoLengthContent.classList.remove('filter-disabled');
+                else videoLengthContent.classList.add('filter-disabled');
+            });
+
+            updateProgress();
+
+            // --- 5. PARALLEL IMAGE LOADER (20 Threads) ---
+            class ParallelImageLoader {
+                constructor(maxConcurrent = 20) {
+                    this.maxConcurrent = maxConcurrent;
+                    this.queue = [];
+                    this.activeCount = 0;
                 }
-            }
-        }
 
-        async fetchVideoDuration(img, videoUrl) {
-            try {
-                const response = await fetch(`?handler=VideoDuration&url=${encodeURIComponent(videoUrl)}`);
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.duration > 0) {
-                        const durationBadge = img.closest('.position-relative').querySelector('[data-duration-display]');
-                        if (durationBadge) {
-                            durationBadge.textContent = this.formatDuration(data.duration);
-                            durationBadge.style.display = 'block';
+                async loadImage(img) {
+                    return new Promise((resolve, reject) => {
+                        this.queue.push({ img, resolve, reject });
+                        this.processQueue();
+                    });
+                }
+
+                async processQueue() {
+                    while (this.activeCount < this.maxConcurrent && this.queue.length > 0) {
+                        const { img, resolve, reject } = this.queue.shift();
+                        this.activeCount++;
+
+                        const src = img.dataset.src;
+                        const videoUrl = img.dataset.duration;
+
+                        const tempImg = new Image();
+                        tempImg.onload = () => {
+                            img.src = src;
+                            img.classList.remove('img-loading');
+                            this.activeCount--;
+                            this.processQueue();
+                            resolve();
+                        };
+                        tempImg.onerror = () => {
+                            img.classList.remove('img-loading');
+                            this.activeCount--;
+                            this.processQueue();
+                            reject();
+                        };
+                        tempImg.src = src;
+
+                        if (videoUrl && videoUrl !== "undefined" && videoUrl !== "") {
+                            this.fetchVideoDuration(img, videoUrl);
                         }
                     }
                 }
-            } catch (err) {
-                console.error('Failed to fetch video duration:', err);
-            }
-        }
 
-        formatDuration(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            const hours = Math.floor(mins / 60);
-            if(hours > 0) {
-                 const remainingMins = mins % 60;
-                 return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-            }
-            return `${mins}:${secs.toString().padStart(2, '0')}`;
-        }
-    }
+                async fetchVideoDuration(img, videoUrl) {
+                    try {
+                        const response = await fetch(`?handler=VideoDuration&url=${encodeURIComponent(videoUrl)}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.duration > 0) {
+                                const durationBadge = img.closest('.position-relative').querySelector('[data-duration-display]');
+                                if (durationBadge) {
+                                    durationBadge.textContent = this.formatDuration(data.duration);
+                                    durationBadge.style.display = 'block';
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.error('Failed to fetch video duration:', err);
+                    }
+                }
 
-    const imageLoader = new ParallelImageLoader(20);
-
-    const observerOptions = {
-        root: null,
-        rootMargin: '50px',
-        threshold: 0.01
-    };
-
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const img = entry.target;
-                if (img.dataset.src && !img.src) {
-                    imageLoader.loadImage(img);
-                    observer.unobserve(img);
+                formatDuration(seconds) {
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    const hours = Math.floor(mins / 60);
+                    if(hours > 0) {
+                         const remainingMins = mins % 60;
+                         return `${hours}:${remainingMins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                    }
+                    return `${mins}:${secs.toString().padStart(2, '0')}`;
                 }
             }
-        });
-    }, observerOptions);
 
-    function reinitLazyLoading() {
-        const lazyImages = document.querySelectorAll('.lazy-image');
-        lazyImages.forEach(img => observer.observe(img));
-    }
+            const imageLoader = new ParallelImageLoader(20);
 
-    // Initial call
-    reinitLazyLoading();
-</script>
+            const observerOptions = {
+                root: null,
+                rootMargin: '50px',
+                threshold: 0.01
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const img = entry.target;
+                        if (img.dataset.src && !img.src) {
+                            imageLoader.loadImage(img);
+                            observer.unobserve(img);
+                        }
+                    }
+                });
+            }, observerOptions);
+
+            function reinitLazyLoading() {
+                const lazyImages = document.querySelectorAll('.lazy-image');
+                lazyImages.forEach(img => observer.observe(img));
+            }
+
+        </script>

@@ -4,14 +4,15 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewEngines;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Siphon.Services;
+using Siphon.Services.LegacyDownloaders.Video;
 using Siphon.Services.LookupServices;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Linq;
 
 namespace Siphon.Pages
 {
@@ -21,11 +22,15 @@ namespace Siphon.Pages
         private readonly ILogger<KemonoAPI> _kemonoLogger;
         private readonly ILogger<CoomerAPI> _coomerLogger;
         private readonly ILogger<Rule34API> _rule34Logger;
+        private readonly ILogger<RedditAPI> _redditLogger;
         private readonly DownloadManager _downloadManager;
         private readonly IWebHostEnvironment _env;
         private readonly ICompositeViewEngine _viewEngine;
         private readonly ITempDataProvider _tempDataProvider;
+
         private readonly string _configPath;
+        private readonly string _redditRegistryPath;
+
         [BindProperty] public string _kemonoSession { get; set; } = "";
         [BindProperty] public string _coomerSession { get; set; } = "";
         [BindProperty] public string _rule34UserId { get; set; } = "";
@@ -38,17 +43,15 @@ namespace Siphon.Pages
         [BindProperty] public string _redditCookie { get; set; } = "";
         public int DOWNLOADERThreads { get; set; }
 
-        // Limit concurrent FFmpeg operations
         private static readonly SemaphoreSlim _thumbGenerationLock = new SemaphoreSlim(3);
-
-        // Cache for video durations to avoid repeated ffprobe calls
-        private static readonly ConcurrentDictionary<string, double> _durationCache = new ConcurrentDictionary<string, double>();
+        private static readonly ConcurrentDictionary<string, double> _durationCache = new ConcurrentDictionary<string, double>();
 
         public ExternalIntegrationsModel(
          ILogger<ExternalIntegrationsModel> logger,
          ILogger<KemonoAPI> kemonoLogger,
          ILogger<CoomerAPI> coomerLogger,
          ILogger<Rule34API> rule34Logger,
+         ILogger<RedditAPI> redditLogger,
          DownloadManager downloadManager,
          IWebHostEnvironment environment,
          ICompositeViewEngine viewEngine,
@@ -58,12 +61,16 @@ namespace Siphon.Pages
             _kemonoLogger = kemonoLogger;
             _coomerLogger = coomerLogger;
             _rule34Logger = rule34Logger;
+            _redditLogger = redditLogger;
             _downloadManager = downloadManager;
             _env = environment;
             _viewEngine = viewEngine;
             _tempDataProvider = tempDataProvider;
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
+            _redditRegistryPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "reddit_registry.json");
+
             LoadConfig();
+            EnsureRegistryExists();
         }
 
         public List<ExternalPost> Posts { get; set; } = new();
@@ -73,9 +80,9 @@ namespace Siphon.Pages
         public string ViewMode { get; set; } = "artists";
 
         [BindProperty(SupportsGet = true)]
-        public string ArtistSortMode { get; set; } = "popularity"; // updated, popularity, indexed, alphabetical, service
+        public string ArtistSortMode { get; set; } = "popularity";
 
-        [BindProperty(SupportsGet = true)]
+        [BindProperty(SupportsGet = true)]
         public bool ReturnToArtists { get; set; } = false;
 
         [BindProperty(SupportsGet = true)]
@@ -111,8 +118,7 @@ namespace Siphon.Pages
         [BindProperty(SupportsGet = true)]
         public int MaxVideoLength { get; set; } = 10000;
 
-        // New property to flag timeouts
-        public bool IsSearchTimeout { get; set; } = false;
+        public bool IsSearchTimeout { get; set; } = false;
 
         [BindProperty]
         public string TimeOutMessage { get; set; } = "";
@@ -145,8 +151,9 @@ namespace Siphon.Pages
             public int AttachmentCount { get; set; }
             public bool HasVideo { get; set; }
             public DateTime Published { get; set; }
-            public double VideoDuration { get; set; } = 0; // Duration in seconds
-        }
+            public double VideoDuration { get; set; } = 0;
+            public string PageAfterToken { get; set; } // <--- Added
+        }
 
         public class ExternalCreator
         {
@@ -160,17 +167,152 @@ namespace Siphon.Pages
             public string OriginalUrl { get; set; }
         }
 
-        public void OnGet()
+        public class SubredditEntry
         {
-            // Just initialize defaults. 
-        }
+            public string Id { get; set; }
+            public string Name { get; set; }
+            public string Url { get; set; }
+            public string SubredditName { get; set; }
+        }
+
+        public class AddSubReq
+        {
+            public string Url { get; set; }
+        }
+
+        public void OnGet() { }
+
+        // --- Reddit Registry Handlers ---
+
+        private void EnsureRegistryExists()
+        {
+            var dir = Path.GetDirectoryName(_redditRegistryPath);
+            if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+            if (!System.IO.File.Exists(_redditRegistryPath))
+            {
+                System.IO.File.WriteAllText(_redditRegistryPath, "[]");
+            }
+        }
+
+        public IActionResult OnGetSubredditRegistry()
+        {
+            try
+            {
+                var json = System.IO.File.ReadAllText(_redditRegistryPath);
+                var list = JsonSerializer.Deserialize<List<SubredditEntry>>(json) ?? new List<SubredditEntry>();
+                return new JsonResult(list.OrderBy(x => x.Name));
+            }
+            catch
+            {
+                return new JsonResult(new List<SubredditEntry>());
+            }
+        }
+
+        public async Task<IActionResult> OnPostAddSubreddit([FromBody] AddSubReq req)
+        {
+            if (string.IsNullOrWhiteSpace(req?.Url))
+                return BadRequest(new { message = "Invalid URL" });
+
+            string url = req.Url.Trim();
+            string subName = "";
+
+            var match = System.Text.RegularExpressions.Regex.Match(url, @"/r/([^/]+)");
+            if (match.Success)
+            {
+                subName = match.Groups[1].Value;
+            }
+            else
+            {
+                return BadRequest(new { message = "Could not parse subreddit from URL." });
+            }
+
+            var entry = new SubredditEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = subName,
+                SubredditName = subName,
+                Url = $"https://www.reddit.com/r/{subName}/"
+            };
+
+            try
+            {
+                var json = await System.IO.File.ReadAllTextAsync(_redditRegistryPath);
+                var list = JsonSerializer.Deserialize<List<SubredditEntry>>(json) ?? new List<SubredditEntry>();
+
+                if (list.Any(x => x.SubredditName.Equals(subName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return BadRequest(new { message = "Subreddit already exists in registry." });
+                }
+
+                list.Add(entry);
+                await System.IO.File.WriteAllTextAsync(_redditRegistryPath, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
+
+                return new JsonResult(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
+
+        public async Task<IActionResult> OnPostEditSubreddit([FromBody] SubredditEntry updatedEntry)
+        {
+            if (updatedEntry == null || string.IsNullOrWhiteSpace(updatedEntry.Id)) return BadRequest();
+
+            try
+            {
+                var json = await System.IO.File.ReadAllTextAsync(_redditRegistryPath);
+                var list = JsonSerializer.Deserialize<List<SubredditEntry>>(json) ?? new List<SubredditEntry>();
+
+                var existing = list.FirstOrDefault(x => x.Id == updatedEntry.Id);
+                if (existing != null)
+                {
+                    existing.Name = updatedEntry.Name;
+                    existing.SubredditName = updatedEntry.SubredditName;
+                    existing.Url = $"https://www.reddit.com/r/{updatedEntry.SubredditName}/";
+
+                    await System.IO.File.WriteAllTextAsync(_redditRegistryPath, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
+                    return new JsonResult(new { success = true });
+                }
+
+                return NotFound();
+            }
+            catch
+            {
+                return StatusCode(500);
+            }
+        }
+
+        public async Task<IActionResult> OnPostDeleteSubreddit([FromBody] SubredditEntry req)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(req.Id)) return BadRequest();
+
+            try
+            {
+                var json = await System.IO.File.ReadAllTextAsync(_redditRegistryPath);
+                var list = JsonSerializer.Deserialize<List<SubredditEntry>>(json) ?? new List<SubredditEntry>();
+
+                var itemToRemove = list.FirstOrDefault(x => x.Id == req.Id);
+                if (itemToRemove != null)
+                {
+                    list.Remove(itemToRemove);
+                    await System.IO.File.WriteAllTextAsync(_redditRegistryPath, JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true }));
+                }
+
+                return new JsonResult(new { success = true });
+            }
+            catch
+            {
+                return StatusCode(500);
+            }
+        }
 
         public async Task<IActionResult> OnGetStreamSearchAsync()
         {
             Response.ContentType = "text/event-stream";
 
-            // Helper to write events
-            async Task SendEvent(string type, string payload)
+            async Task SendEvent(string type, string payload)
             {
                 var json = JsonSerializer.Serialize(new { type, payload });
                 await Response.WriteAsync($"data: {json}\n\n");
@@ -184,8 +326,8 @@ namespace Siphon.Pages
             string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
             if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
 
-            // --- ARTISTS LOOKUP MODE ---
-            if (ViewMode == "artists")
+            // --- ARTISTS LOOKUP MODE ---
+            if (ViewMode == "artists")
             {
                 string cacheFileName = $"Feed_{Site}_Creators.json";
                 string cachePath = Path.Combine(cacheFolder, cacheFileName);
@@ -252,8 +394,7 @@ namespace Siphon.Pages
                      (c.Id != null && c.Id.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)));
                 }
 
-                // Apply Sorting
-                filteredCreators = ArtistSortMode switch
+                filteredCreators = ArtistSortMode switch
                 {
                     "popularity" => filteredCreators.OrderByDescending(c => c.Favorited),
                     "indexed" => filteredCreators.OrderByDescending(c => c.Indexed),
@@ -268,16 +409,15 @@ namespace Siphon.Pages
                 await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = nextOffset }));
                 await SendEvent("status", "Rendering results...");
 
-                // Pass "this" model entirely to partial
-                string htmlContent = await RenderPartialToStringAsync("_PostGrid", this);
+                string htmlContent = await RenderPartialToStringAsync("_PostGrid", this);
                 await SendEvent("result", htmlContent);
                 return new EmptyResult();
             }
 
-            // --- POSTS LOOKUP MODE ---
-            int retryCount = 0;
-            int maxRetries = 20; // Prevent infinite loops. Stop after checking 20 pages (1000 posts).
-            bool keepSearching = true;
+            // --- POSTS LOOKUP MODE ---
+            int retryCount = 0;
+            int maxRetries = Site == "reddit.com" ? 200000 : 20;
+            bool keepSearching = true;
 
             while (keepSearching)
             {
@@ -296,7 +436,17 @@ namespace Siphon.Pages
                         await SendEvent("status", $"Checking local cache (Offset {Offset})...");
                         string json = await System.IO.File.ReadAllTextAsync(cachePath);
                         rawPosts = JsonSerializer.Deserialize<List<ExternalPost>>(json);
-                        if (rawPosts != null) SearchTriggered = true;
+
+                        if (rawPosts != null)
+                        {
+                            SearchTriggered = true;
+
+                            // Bridging the JSON cache back to the API pagination token
+                            if (Site == "reddit.com" && rawPosts.Any() && !string.IsNullOrEmpty(rawPosts.First().PageAfterToken))
+                            {
+                                RedditAPI.SetPaginationToken(SearchUser, Offset + 50, rawPosts.First().PageAfterToken);
+                            }
+                        }
                     }
                     catch { }
                 }
@@ -335,6 +485,14 @@ namespace Siphon.Pages
                             }
                             else if (rawPosts[0].Id != null && rawPosts[0].Id.Contains("End Of Posts"))
                             {
+                                if (Site == "reddit.com" && Offset < 10000000)
+                                {
+                                    Offset += 50;
+                                    retryCount++;
+                                    await SendEvent("status", $"Reddit pagination gap. Forcing next page (Offset {Offset})...");
+                                    continue;
+                                }
+
                                 timeOutType = TimeOutType.EndOfPosts;
                                 IsSearchTimeout = true;
                                 await SendEvent("warning", "Reached the end of available posts.");
@@ -345,6 +503,13 @@ namespace Siphon.Pages
                                 IsSearchTimeout = true;
                                 timeOutType = TimeOutType.ApiIssue;
                                 await SendEvent("error", "API Auth Key not authenticated");
+                                return new EmptyResult();
+                            }
+                            else if (rawPosts[0].Id == "Reddit Not Authed")
+                            {
+                                IsSearchTimeout = true;
+                                timeOutType = TimeOutType.ApiIssue;
+                                await SendEvent("error", "Reddit Session Cookie is missing or invalid.");
                                 return new EmptyResult();
                             }
 
@@ -493,7 +658,7 @@ namespace Siphon.Pages
 
         private async Task EnrichWithVideoDurations(List<ExternalPost> posts, Func<string, Task> progressCallback = null)
         {
-            var videoPosts = posts.Where(p => p.HasVideo && !string.IsNullOrEmpty(p.ThumbnailUrl)).ToList();
+            var videoPosts = posts.Where(p => p.HasVideo && p.VideoDuration == 0 && !string.IsNullOrEmpty(p.ThumbnailUrl)).ToList();
 
             if (!videoPosts.Any()) return;
 
@@ -510,6 +675,13 @@ namespace Siphon.Pages
                 try
                 {
                     string videoUrl = post.ThumbnailUrl;
+
+                    if (videoUrl.Contains("redgifs.com"))
+                    {
+                        var redGifsData = await SharedScraperLogic.ResolveRedGifsUrlWithDurationAsync(videoUrl, CancellationToken.None);
+                        post.VideoDuration = redGifsData.Duration;
+                        return;
+                    }
 
                     if (_durationCache.TryGetValue(videoUrl, out double cachedDuration))
                     {
@@ -566,6 +738,12 @@ namespace Siphon.Pages
                     var results = await rule34Api.FetchPostsAsync(user, offset);
                     return ConvertToExternalPosts(results);
                 }
+                else if (site.Contains("reddit.com"))
+                {
+                    var redditApi = new RedditAPI(_redditLogger, _redditCookie);
+                    var results = await redditApi.FetchPostsAsync(user, offset);
+                    return ConvertToExternalPosts(results);
+                }
                 else
                 {
                     _logger.LogWarning($"Unknown site: {site}");
@@ -595,10 +773,9 @@ namespace Siphon.Pages
                     var results = await coomerApi.FetchCreatorsAsync();
                     return ConvertToExternalCreators(results, "coomer.st");
                 }
-                else if (site.Contains("rule34"))
+                else if (site.Contains("rule34") || site.Contains("reddit.com"))
                 {
-                    // Rule34 doesn't have a specific global creator fetch logic
-                    return new List<ExternalCreator>();
+                    return new List<ExternalCreator>();
                 }
                 else
                 {
@@ -664,6 +841,24 @@ namespace Siphon.Pages
             }).ToList();
         }
 
+        private List<ExternalPost> ConvertToExternalPosts(List<RedditAPI.PostResult> results)
+        {
+            return results.Select(r => new ExternalPost
+            {
+                Id = r.Id,
+                Title = r.Title,
+                User = r.User,
+                Service = r.Service,
+                ThumbnailUrl = r.ThumbnailUrl,
+                OriginalUrl = r.OriginalUrl,
+                AttachmentCount = r.AttachmentCount,
+                HasVideo = r.HasVideo,
+                Published = r.Published,
+                VideoDuration = r.VideoDuration,
+                PageAfterToken = r.PageAfterToken
+            }).ToList();
+        }
+
         private List<ExternalCreator> ConvertToExternalCreators(List<KemonoAPI.CreatorResult> results, string domain)
         {
             return results.Select(r => new ExternalCreator
@@ -696,10 +891,18 @@ namespace Siphon.Pages
 
         public async Task<IActionResult> OnGetVideoDurationAsync(string url)
         {
-            if (string.IsNullOrEmpty(url) || !IsVideo(url))
+            if (string.IsNullOrEmpty(url)) return new JsonResult(new { duration = 0 });
+
+            if (url.Contains("redgifs.com/watch/"))
             {
-                return new JsonResult(new { duration = 0 });
+                var redGifsData = await SharedScraperLogic.ResolveRedGifsUrlWithDurationAsync(url, CancellationToken.None);
+                if (redGifsData.Duration > 0)
+                {
+                    return new JsonResult(new { duration = redGifsData.Duration });
+                }
             }
+
+            if (!IsVideo(url)) return new JsonResult(new { duration = 0 });
 
             if (_durationCache.TryGetValue(url, out double cachedDuration))
             {
@@ -731,6 +934,8 @@ namespace Siphon.Pages
         {
             if (string.IsNullOrEmpty(url)) return NotFound();
 
+            url = System.Web.HttpUtility.HtmlDecode(url);
+
             if (IsVideo(url))
             {
                 return await GenerateAndServeVideoFrame(url);
@@ -746,11 +951,13 @@ namespace Siphon.Pages
 
                 using var client = new HttpClient(handler);
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36");
+                client.DefaultRequestHeaders.Accept.ParseAdd("image/webp,image/apng,image/*,*/*;q=0.8");
 
                 var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
 
                 if (!response.IsSuccessStatusCode)
                 {
+                    _logger.LogWarning($"Proxy failed to fetch image. Status: {response.StatusCode} URL: {url}");
                     return NotFound();
                 }
 
@@ -773,6 +980,8 @@ namespace Siphon.Pages
             string thumbDir = Path.Combine(_env.WebRootPath, "VideoThumbnailsCache");
             if (!Directory.Exists(thumbDir)) Directory.CreateDirectory(thumbDir);
 
+            videoUrl = await SharedScraperLogic.ResolveRedGifsUrlAsync(videoUrl, CancellationToken.None);
+
             using var sha = SHA256.Create();
             var bytes = Encoding.UTF8.GetBytes(videoUrl);
             var hash = Convert.ToHexString(sha.ComputeHash(bytes));
@@ -788,14 +997,24 @@ namespace Siphon.Pages
             {
                 if (System.IO.File.Exists(filePath)) return File(System.IO.File.OpenRead(filePath), "image/jpeg");
 
-                string domain = videoUrl.Contains("kemono") ? "kemono.cr" : videoUrl.Contains("coomer") ? "coomer.st" : "rule34.xxx";
-                string cookie = videoUrl.Contains("kemono") ? _kemonoSession : videoUrl.Contains("coomer") ? _coomerSession : "";
-                string headers = videoUrl.Contains("rule34")
-                 ? "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://rule34.xxx/\r\n"
-                 : $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
+                string domain = videoUrl.Contains("kemono") ? "kemono.cr" : videoUrl.Contains("coomer") ? "coomer.st" : videoUrl.Contains("rule34") ? "rule34.xxx" : "reddit.com";
+                string cookie = videoUrl.Contains("kemono") ? _kemonoSession : videoUrl.Contains("coomer") ? _coomerSession : videoUrl.Contains("reddit.com") ? _redditCookie : "";
+
+                string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\n";
+                if (videoUrl.Contains("rule34"))
+                {
+                    headers += "Referer: https://rule34.xxx/\r\n";
+                }
+                else if (videoUrl.Contains("reddit.com") || videoUrl.Contains("v.redd.it") || videoUrl.Contains("redgifs.com"))
+                {
+                    headers += $"Referer: https://www.reddit.com/\r\nCookie: reddit_session={_redditCookie}\r\n";
+                }
+                else
+                {
+                    headers += $"Referer: https://{domain}/\r\nCookie: session={cookie}\r\n";
+                }
 
                 double duration = await GetVideoDuration(videoUrl, headers);
-
                 double seekTime = (duration >= 5.0) ? 5.0 : Math.Max(0, duration - 0.5);
 
                 var startInfo = new ProcessStartInfo
@@ -933,8 +1152,11 @@ namespace Siphon.Pages
         private bool IsVideo(string path)
         {
             if (string.IsNullOrEmpty(path)) return false;
+
+            if (path.Contains("redgifs.com") || path.Contains("v.redd.it")) return true;
+
             string ext = Path.GetExtension(path.Split('?')[0]).ToLower();
-            return new[] { ".mp4", ".mkv", ".webm", ".mov", ".m4v" }.Contains(ext);
+            return new[] { ".mp4", ".mkv", ".webm", ".mov", ".m4v", ".gifv", ".m3u8" }.Contains(ext);
         }
 
         public IActionResult OnPostDownload([FromQuery] string url)

@@ -35,10 +35,16 @@ namespace Siphon.Services.LegacyDownloaders.Video
 
         public static async Task<string> ResolveRedGifsUrlAsync(string url, CancellationToken token)
         {
-            if (!url.Contains("redgifs.com/watch/")) return url;
+            var result = await ResolveRedGifsUrlWithDurationAsync(url, token);
+            return result.Url;
+        }
+
+        public static async Task<(string Url, double Duration)> ResolveRedGifsUrlWithDurationAsync(string url, CancellationToken token)
+        {
+            if (!url.Contains("redgifs.com/watch/")) return (url, 0);
 
             var match = Regex.Match(url, @"watch/([a-zA-Z0-9]+)");
-            if (!match.Success) return url;
+            if (!match.Success) return (url, 0);
             string id = match.Groups[1].Value.ToLower();
 
             using var client = new HttpClient();
@@ -46,31 +52,35 @@ namespace Siphon.Services.LegacyDownloaders.Video
 
             try
             {
-                // 1. Get temporary auth token
                 var authResp = await client.GetAsync("https://api.redgifs.com/v2/auth/temporary", token);
-                if (!authResp.IsSuccessStatusCode) return url;
+                if (!authResp.IsSuccessStatusCode) return (url, 0);
 
                 var authJson = await authResp.Content.ReadAsStringAsync(token);
                 var authObj = JsonNode.Parse(authJson);
                 string accessToken = authObj?["token"]?.ToString();
 
-                if (string.IsNullOrEmpty(accessToken)) return url;
+                if (string.IsNullOrEmpty(accessToken)) return (url, 0);
 
-                // 2. Get GIF metadata
                 client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
                 var gifResp = await client.GetAsync($"https://api.redgifs.com/v2/gifs/{id}", token);
-                if (!gifResp.IsSuccessStatusCode) return url;
+                if (!gifResp.IsSuccessStatusCode) return (url, 0);
 
                 var gifJson = await gifResp.Content.ReadAsStringAsync(token);
                 var gifObj = JsonNode.Parse(gifJson);
 
-                // Extract the HD mp4 url
                 string mp4Url = gifObj?["gif"]?["urls"]?["hd"]?.ToString();
-                return !string.IsNullOrEmpty(mp4Url) ? mp4Url : url;
+
+                double duration = 0;
+                if (double.TryParse(gifObj?["gif"]?["duration"]?.ToString(), out double d))
+                {
+                    duration = d;
+                }
+
+                return (!string.IsNullOrEmpty(mp4Url) ? mp4Url : url, duration);
             }
             catch
             {
-                return url; // Fallback to original url if API fails
+                return (url, 0); // Fallback to original url if API fails
             }
         }
 
@@ -167,7 +177,6 @@ namespace Siphon.Services.LegacyDownloaders.Video
 
             string editingPath = originalFile.FullName;
 
-            // Safety check: Don't convert if it's already mp4 (should be handled by caller, but safe to check)
             if (string.Equals(Path.GetExtension(inputPath), ".mp4", StringComparison.OrdinalIgnoreCase))
             {
                 return inputPath;
@@ -175,12 +184,6 @@ namespace Siphon.Services.LegacyDownloaders.Video
 
             job.Status = "Converting to MP4...";
 
-            // Command: 
-            // -y: Overwrite output
-            // -i: Input file
-            // -c:v libx264: Use H.264 video codec
-            // -c:a aac: Use AAC audio codec
-            // -movflags +faststart: Move metadata to start of file (good for web playback)
             string args = $"-y -i \"{editingPath}\" -c:v libx264 -c:a aac -movflags +faststart \"{convertOutputPath}\"";
 
             var startInfo = new ProcessStartInfo
@@ -188,22 +191,17 @@ namespace Siphon.Services.LegacyDownloaders.Video
                 FileName = "ffmpeg",
                 Arguments = args,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true, // FFmpeg writes stats to stderr
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
-
-            // We can wait for exit. 
-            // Note: Parsing FFmpeg progress from stderr is possible but complex. 
-            // For now, an indeterminate status is usually fine for conversion.
             await process.WaitForExitAsync(token);
 
             if (process.ExitCode == 0)
             {
-                // Conversion success: Delete the original non-mp4 file
                 try { if (File.Exists(editingPath)) File.Delete(editingPath); } catch { }
                 try
                 {
