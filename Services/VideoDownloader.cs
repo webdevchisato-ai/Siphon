@@ -4,6 +4,7 @@ using PuppeteerExtraSharp;
 using PuppeteerExtraSharp.Plugins.ExtraStealth;
 using PuppeteerSharp;
 using Siphon.Services.LegacyDownloaders;
+using Siphon.Services.LegacyDownloaders.Video;
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json.Nodes;
@@ -24,6 +25,9 @@ namespace Siphon.Services
         private string _cfClearance = "";
         private string _mangaViewCookie = "";
         private string _HentaiDudeAgent = "";
+        private string _rule34UserID = "";
+        private string _rule34APIKey = "";
+        private string _redditCookie = "";
 
         public VideoDownloader(IWebHostEnvironment env, ILogger<VideoDownloader> logger)
         {
@@ -72,6 +76,10 @@ namespace Siphon.Services
                     await new HentaiDudeDownloader(_downloadPath, job.Url, job, _logger, _cfClearance, _mangaViewCookie, _HentaiDudeAgent).Download(token);
                 else if (job.Url.Contains("rule34video.com"))
                     await new Rule34VideoDownloader(_downloadPath, job.Url, job, _logger).Download(token);
+                else if (job.Url.Contains("rule34.xxx"))
+                    await new Rule34Downloader(_downloadPath, job.Url, job, _logger).Download(token);
+                else if (job.Url.Contains("reddit.com"))
+                    await new RedditDownloader(_downloadPath, job.Url, job, _redditCookie, _logger, _env).Download(token);
                 else
                     await new UniversalDownloader(_downloadPath, job.Url, job).Download(token);
 
@@ -729,6 +737,9 @@ namespace Siphon.Services
                         if (trimmed.StartsWith("CF_CLEARANCE=")) _cfClearance = trimmed.Substring(13).Trim();
                         if (trimmed.StartsWith("MANGAVIEW_COOKIE=")) _mangaViewCookie = trimmed.Substring(17).Trim();
                         if (trimmed.StartsWith("HENTAI_DUDE_AGENT=")) _HentaiDudeAgent = trimmed.Substring(18).Trim();
+                        if (trimmed.StartsWith("RULE34_USER_ID=")) _rule34UserID = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("RULE34_API_KEY=")) _rule34UserID = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("REDDIT_COOKIE=")) _redditCookie = trimmed.Substring(14).Trim();
                     }
                 }
             }

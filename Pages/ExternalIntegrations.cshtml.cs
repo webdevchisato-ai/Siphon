@@ -20,32 +20,44 @@ namespace Siphon.Pages
         private readonly ILogger<ExternalIntegrationsModel> _logger;
         private readonly ILogger<KemonoAPI> _kemonoLogger;
         private readonly ILogger<CoomerAPI> _coomerLogger;
+        private readonly ILogger<Rule34API> _rule34Logger;
         private readonly DownloadManager _downloadManager;
         private readonly IWebHostEnvironment _env;
         private readonly ICompositeViewEngine _viewEngine;
         private readonly ITempDataProvider _tempDataProvider;
         private readonly string _configPath;
-        private string _kemonoSession = "";
-        private string _coomerSession = "";
+        [BindProperty] public string _kemonoSession { get; set; } = "";
+        [BindProperty] public string _coomerSession { get; set; } = "";
+        [BindProperty] public string _rule34UserId { get; set; } = "";
+        [BindProperty] public string _rule34ApiKey { get; set; } = "";
+        [BindProperty] public string _phpssessid { get; set; } = "";
+        [BindProperty] public string _eprns { get; set; } = "";
+        [BindProperty] public string _cfClearence { get; set; } = "";
+        [BindProperty] public string _mangaViewCookie { get; set; } = "";
+        [BindProperty] public string _hentaiDudeAgent { get; set; } = "";
+        [BindProperty] public string _redditCookie { get; set; } = "";
+        public int DOWNLOADERThreads { get; set; }
 
         // Limit concurrent FFmpeg operations
         private static readonly SemaphoreSlim _thumbGenerationLock = new SemaphoreSlim(3);
 
-        // Cache for video durations to avoid repeated ffprobe calls
-        private static readonly ConcurrentDictionary<string, double> _durationCache = new ConcurrentDictionary<string, double>();
+        // Cache for video durations to avoid repeated ffprobe calls
+        private static readonly ConcurrentDictionary<string, double> _durationCache = new ConcurrentDictionary<string, double>();
 
         public ExternalIntegrationsModel(
-            ILogger<ExternalIntegrationsModel> logger,
-            ILogger<KemonoAPI> kemonoLogger,
-            ILogger<CoomerAPI> coomerLogger,
-            DownloadManager downloadManager,
-            IWebHostEnvironment environment,
-            ICompositeViewEngine viewEngine,
-            ITempDataProvider tempDataProvider)
+         ILogger<ExternalIntegrationsModel> logger,
+         ILogger<KemonoAPI> kemonoLogger,
+         ILogger<CoomerAPI> coomerLogger,
+         ILogger<Rule34API> rule34Logger,
+         DownloadManager downloadManager,
+         IWebHostEnvironment environment,
+         ICompositeViewEngine viewEngine,
+         ITempDataProvider tempDataProvider)
         {
             _logger = logger;
             _kemonoLogger = kemonoLogger;
             _coomerLogger = coomerLogger;
+            _rule34Logger = rule34Logger;
             _downloadManager = downloadManager;
             _env = environment;
             _viewEngine = viewEngine;
@@ -63,7 +75,7 @@ namespace Siphon.Pages
         [BindProperty(SupportsGet = true)]
         public string ArtistSortMode { get; set; } = "popularity"; // updated, popularity, indexed, alphabetical, service
 
-        [BindProperty(SupportsGet = true)]
+        [BindProperty(SupportsGet = true)]
         public bool ReturnToArtists { get; set; } = false;
 
         [BindProperty(SupportsGet = true)]
@@ -99,8 +111,8 @@ namespace Siphon.Pages
         [BindProperty(SupportsGet = true)]
         public int MaxVideoLength { get; set; } = 10000;
 
-        // New property to flag timeouts
-        public bool IsSearchTimeout { get; set; } = false;
+        // New property to flag timeouts
+        public bool IsSearchTimeout { get; set; } = false;
 
         [BindProperty]
         public string TimeOutMessage { get; set; } = "";
@@ -134,7 +146,7 @@ namespace Siphon.Pages
             public bool HasVideo { get; set; }
             public DateTime Published { get; set; }
             public double VideoDuration { get; set; } = 0; // Duration in seconds
-        }
+        }
 
         public class ExternalCreator
         {
@@ -150,15 +162,15 @@ namespace Siphon.Pages
 
         public void OnGet()
         {
-            // Just initialize defaults. 
-        }
+            // Just initialize defaults. 
+        }
 
         public async Task<IActionResult> OnGetStreamSearchAsync()
         {
             Response.ContentType = "text/event-stream";
 
-            // Helper to write events
-            async Task SendEvent(string type, string payload)
+            // Helper to write events
+            async Task SendEvent(string type, string payload)
             {
                 var json = JsonSerializer.Serialize(new { type, payload });
                 await Response.WriteAsync($"data: {json}\n\n");
@@ -172,8 +184,8 @@ namespace Siphon.Pages
             string cacheFolder = Path.Combine(_env.WebRootPath, "ExternalIntegrationCache");
             if (!Directory.Exists(cacheFolder)) Directory.CreateDirectory(cacheFolder);
 
-            // --- ARTISTS LOOKUP MODE ---
-            if (ViewMode == "artists")
+            // --- ARTISTS LOOKUP MODE ---
+            if (ViewMode == "artists")
             {
                 string cacheFileName = $"Feed_{Site}_Creators.json";
                 string cachePath = Path.Combine(cacheFolder, cacheFileName);
@@ -236,12 +248,12 @@ namespace Siphon.Pages
                 if (!string.IsNullOrWhiteSpace(SearchUser))
                 {
                     filteredCreators = filteredCreators.Where(c =>
-                        (c.Name != null && c.Name.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)) ||
-                        (c.Id != null && c.Id.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)));
+                     (c.Name != null && c.Name.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)) ||
+                     (c.Id != null && c.Id.Contains(SearchUser, StringComparison.OrdinalIgnoreCase)));
                 }
 
-                // Apply Sorting
-                filteredCreators = ArtistSortMode switch
+                // Apply Sorting
+                filteredCreators = ArtistSortMode switch
                 {
                     "popularity" => filteredCreators.OrderByDescending(c => c.Favorited),
                     "indexed" => filteredCreators.OrderByDescending(c => c.Indexed),
@@ -256,16 +268,16 @@ namespace Siphon.Pages
                 await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = nextOffset }));
                 await SendEvent("status", "Rendering results...");
 
-                // Pass "this" model entirely to partial
-                string htmlContent = await RenderPartialToStringAsync("_PostGrid", this);
+                // Pass "this" model entirely to partial
+                string htmlContent = await RenderPartialToStringAsync("_PostGrid", this);
                 await SendEvent("result", htmlContent);
                 return new EmptyResult();
             }
 
-            // --- POSTS LOOKUP MODE ---
-            int retryCount = 0;
+            // --- POSTS LOOKUP MODE ---
+            int retryCount = 0;
             int maxRetries = 20; // Prevent infinite loops. Stop after checking 20 pages (1000 posts).
-            bool keepSearching = true;
+            bool keepSearching = true;
 
             while (keepSearching)
             {
@@ -314,18 +326,25 @@ namespace Siphon.Pages
 
                         if (rawPosts.Count() > 0)
                         {
-                            if (rawPosts[0].Id.Contains("Not Found"))
+                            if (rawPosts[0].Id != null && rawPosts[0].Id.Contains("Not Found"))
                             {
                                 IsSearchTimeout = true;
                                 timeOutType = TimeOutType.NotFound;
                                 await SendEvent("warning", "User not found. Please check the ID and Service.");
                                 return new EmptyResult();
                             }
-                            else if (rawPosts[0].Id.Contains("End Of Posts"))
+                            else if (rawPosts[0].Id != null && rawPosts[0].Id.Contains("End Of Posts"))
                             {
                                 timeOutType = TimeOutType.EndOfPosts;
                                 IsSearchTimeout = true;
                                 await SendEvent("warning", "Reached the end of available posts.");
+                                return new EmptyResult();
+                            }
+                            else if (rawPosts[0].Id == "Rule34 Not Authed")
+                            {
+                                IsSearchTimeout = true;
+                                timeOutType = TimeOutType.ApiIssue;
+                                await SendEvent("error", "API Auth Key not authenticated");
                                 return new EmptyResult();
                             }
 
@@ -423,8 +442,8 @@ namespace Siphon.Pages
                     if (EnableVideoLengthFilter)
                     {
                         filtered = filtered.Where(p =>
-                            !p.HasVideo ||
-                            (p.VideoDuration >= MinVideoLength && p.VideoDuration <= MaxVideoLength)
+                         !p.HasVideo ||
+                         (p.VideoDuration >= MinVideoLength && p.VideoDuration <= MaxVideoLength)
                         );
                     }
 
@@ -459,12 +478,12 @@ namespace Siphon.Pages
                 };
 
                 var viewContext = new ViewContext(
-                    actionContext,
-                    viewResult.View,
-                    viewDictionary,
-                    new TempDataDictionary(actionContext.HttpContext, _tempDataProvider),
-                    sw,
-                    new HtmlHelperOptions()
+                 actionContext,
+                 viewResult.View,
+                 viewDictionary,
+                 new TempDataDictionary(actionContext.HttpContext, _tempDataProvider),
+                 sw,
+                 new HtmlHelperOptions()
                 );
 
                 await viewResult.View.RenderAsync(viewContext);
@@ -498,9 +517,11 @@ namespace Siphon.Pages
                     }
                     else
                     {
-                        string domain = videoUrl.Contains("kemono") ? "kemono.cr" : "coomer.st";
-                        string cookie = videoUrl.Contains("kemono") ? _kemonoSession : _coomerSession;
-                        string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
+                        string domain = videoUrl.Contains("kemono") ? "kemono.cr" : videoUrl.Contains("coomer") ? "coomer.st" : "rule34.xxx";
+                        string cookie = videoUrl.Contains("kemono") ? _kemonoSession : videoUrl.Contains("coomer") ? _coomerSession : "";
+                        string headers = videoUrl.Contains("rule34")
+                         ? "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://rule34.xxx/\r\n"
+                         : $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
 
                         double duration = await GetVideoDuration(videoUrl, headers);
                         post.VideoDuration = duration;
@@ -539,6 +560,12 @@ namespace Siphon.Pages
                     var results = await coomerApi.FetchPostsAsync(ServiceType, user, offset);
                     return ConvertToExternalPosts(results);
                 }
+                else if (site.Contains("rule34"))
+                {
+                    var rule34Api = new Rule34API(_rule34Logger, _rule34UserId, _rule34ApiKey);
+                    var results = await rule34Api.FetchPostsAsync(user, offset);
+                    return ConvertToExternalPosts(results);
+                }
                 else
                 {
                     _logger.LogWarning($"Unknown site: {site}");
@@ -567,6 +594,11 @@ namespace Siphon.Pages
                     var coomerApi = new CoomerAPI(_coomerLogger, _coomerSession);
                     var results = await coomerApi.FetchCreatorsAsync();
                     return ConvertToExternalCreators(results, "coomer.st");
+                }
+                else if (site.Contains("rule34"))
+                {
+                    // Rule34 doesn't have a specific global creator fetch logic
+                    return new List<ExternalCreator>();
                 }
                 else
                 {
@@ -599,6 +631,23 @@ namespace Siphon.Pages
         }
 
         private List<ExternalPost> ConvertToExternalPosts(List<CoomerAPI.PostResult> results)
+        {
+            return results.Select(r => new ExternalPost
+            {
+                Id = r.Id,
+                Title = r.Title,
+                User = r.User,
+                Service = r.Service,
+                ThumbnailUrl = r.ThumbnailUrl,
+                OriginalUrl = r.OriginalUrl,
+                AttachmentCount = r.AttachmentCount,
+                HasVideo = r.HasVideo,
+                Published = r.Published,
+                VideoDuration = 0
+            }).ToList();
+        }
+
+        private List<ExternalPost> ConvertToExternalPosts(List<Rule34API.PostResult> results)
         {
             return results.Select(r => new ExternalPost
             {
@@ -659,9 +708,11 @@ namespace Siphon.Pages
 
             try
             {
-                string domain = url.Contains("kemono") ? "kemono.cr" : "coomer.st";
-                string cookie = url.Contains("kemono") ? _kemonoSession : _coomerSession;
-                string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
+                string domain = url.Contains("kemono") ? "kemono.cr" : url.Contains("coomer") ? "coomer.st" : "rule34.xxx";
+                string cookie = url.Contains("kemono") ? _kemonoSession : url.Contains("coomer") ? _coomerSession : "";
+                string headers = url.Contains("rule34")
+                 ? "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://rule34.xxx/\r\n"
+                 : $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
 
                 double duration = await GetVideoDuration(url, headers);
 
@@ -737,9 +788,11 @@ namespace Siphon.Pages
             {
                 if (System.IO.File.Exists(filePath)) return File(System.IO.File.OpenRead(filePath), "image/jpeg");
 
-                string domain = videoUrl.Contains("kemono") ? "kemono.cr" : "coomer.st";
-                string cookie = videoUrl.Contains("kemono") ? _kemonoSession : _coomerSession;
-                string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
+                string domain = videoUrl.Contains("kemono") ? "kemono.cr" : videoUrl.Contains("coomer") ? "coomer.st" : "rule34.xxx";
+                string cookie = videoUrl.Contains("kemono") ? _kemonoSession : videoUrl.Contains("coomer") ? _coomerSession : "";
+                string headers = videoUrl.Contains("rule34")
+                 ? "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://rule34.xxx/\r\n"
+                 : $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\nReferer: https://{domain}/\r\nCookie: session={cookie}";
 
                 double duration = await GetVideoDuration(videoUrl, headers);
 
@@ -825,10 +878,56 @@ namespace Siphon.Pages
                         var trimmed = line.Trim();
                         if (trimmed.StartsWith("COOMER_SESSION=")) _coomerSession = trimmed.Substring(15).Trim();
                         if (trimmed.StartsWith("KEMONO_SESSION=")) _kemonoSession = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("PHPSESSID=")) _phpssessid = trimmed.Substring(10).Trim();
+                        if (trimmed.StartsWith("EPRNS=")) _eprns = trimmed.Substring(6).Trim();
+                        if (trimmed.StartsWith("CF_CLEARANCE=")) _cfClearence = trimmed.Substring(13).Trim();
+                        if (trimmed.StartsWith("MANGAVIEW_COOKIE=")) _mangaViewCookie = trimmed.Substring(17).Trim();
+                        if (trimmed.StartsWith("HENTAI_DUDE_AGENT=")) _hentaiDudeAgent = trimmed.Substring(18).Trim();
+                        if (trimmed.StartsWith("RULE34_USER_ID=")) _rule34UserId = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("RULE34_API_KEY=")) _rule34ApiKey = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("REDDIT_COOKIE=")) _redditCookie = trimmed.Substring(14).Trim();
+                        if (trimmed.StartsWith("THREADS="))
+                        {
+                            if (int.TryParse(trimmed.Substring(8).Trim(), out int t)) DOWNLOADERThreads = t;
+                        }
                     }
                 }
             }
             catch { }
+        }
+
+        private void SaveConfig()
+        {
+            try
+            {
+                var lines = new List<string>
+                {
+                    $"PHPSESSID={_phpssessid}",
+                    $"EPRNS={_eprns}",
+                    $"COOMER_SESSION={_coomerSession}",
+                    $"KEMONO_SESSION={_kemonoLogger}",
+                    $"THREADS={DOWNLOADERThreads}",
+                    $"CF_CLEARANCE={_cfClearence}",
+                    $"MANGAVIEW_COOKIE={_mangaViewCookie}",
+                    $"HENTAI_DUDE_AGENT={_hentaiDudeAgent}",
+                    $"RULE34_USER_ID={_rule34UserId}",
+                    $"RULE34_API_KEY={_rule34ApiKey}",
+                    $"REDDIT_COOKIE={_redditCookie}",
+                    "PATH=/app/wwwroot/Pending"
+                };
+
+                var dir = Path.GetDirectoryName(_configPath);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+
+                System.IO.File.WriteAllLines(_configPath, lines);
+            }
+            catch { /* Handle error */ }
+        }
+
+        public IActionResult OnPostUpdateSettings()
+        {
+            SaveConfig();
+            return RedirectToPage();
         }
 
         private bool IsVideo(string path)

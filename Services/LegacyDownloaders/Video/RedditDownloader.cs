@@ -1,12 +1,11 @@
 ﻿using PuppeteerSharp;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
-using Siphon.Services;
 using System.Web;
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services.LegacyDownloaders.Video
 {
-    public class KemonoDownloader
+    public class RedditDownloader
     {
         private string _downloadPath;
         private string _url;
@@ -15,7 +14,7 @@ namespace Siphon.Services.LegacyDownloaders
         private readonly ILogger _logger;
         private readonly IWebHostEnvironment _env;
 
-        public KemonoDownloader(string path, string url, DownloadJob job, string sessionCookie, ILogger logger, IWebHostEnvironment env)
+        public RedditDownloader(string path, string url, DownloadJob job, string sessionCookie, ILogger logger, IWebHostEnvironment env)
         {
             _downloadPath = path;
             _url = url;
@@ -27,12 +26,12 @@ namespace Siphon.Services.LegacyDownloaders
 
         public async Task Download(CancellationToken token)
         {
-            _job.Status = "Initializing Kemono Browser...";
+            _job.Status = "Initializing Reddit Browser...";
 
-            if (!_url.Contains("/post/"))
-                throw new Exception("Invalid URL. Must be a specific post link.");
+            if (!_url.Contains("reddit.com/r/") || !_url.Contains("/comments/"))
+                throw new Exception("Invalid URL. Must be a specific Reddit post link.");
 
-            JsonNode rootNode = null;
+            string[] videoUrls = null;
             IBrowser browser = null;
 
             try
@@ -56,7 +55,7 @@ namespace Siphon.Services.LegacyDownloaders
 
                         await page.SetCookieAsync(new CookieParam
                         {
-                            Name = "session",
+                            Name = "reddit_session", // <-- Updated to Reddit's auth cookie name
                             Value = _sessionCookie,
                             Domain = $".{domain}",
                             Path = "/",
@@ -70,19 +69,42 @@ namespace Siphon.Services.LegacyDownloaders
 
                     _job.Status = "Extracting metadata...";
 
-                    string jsonContent = await page.EvaluateFunctionAsync<string>(@"async () => {
-                        const apiPath = '/api/v1' + window.location.pathname;
-                        const apiUrl = window.location.origin + apiPath;
+                    videoUrls = await page.EvaluateFunctionAsync<string[]>(@"async () => {
+                        let urls = [];
                         
-                        const response = await fetch(apiUrl);
-                        if (!response.ok) throw new Error('API Error: ' + response.status);
-                        return await response.text();
+                        // 1. Native Reddit Video
+                        const videoSources = document.querySelectorAll('shreddit-player source, video source');
+                        videoSources.forEach(source => {
+                            if (source.src) urls.push(source.src);
+                        });
+
+                        // 2. Shreddit Post content-href (Catch-all for embeds like RedGIFs)
+                        const post = document.querySelector('shreddit-post');
+                        if (post) {
+                            const contentHref = post.getAttribute('content-href');
+                            if (contentHref) urls.push(contentHref);
+                        }
+
+                        // 3. Fallback to shreddit-screenview-data
+                        const screenData = document.querySelector('shreddit-screenview-data');
+                        if (screenData) {
+                            try {
+                                const data = JSON.parse(screenData.getAttribute('data'));
+                                if (data && data.post && data.post.url) urls.push(data.post.url);
+                            } catch (e) {}
+                        }
+                        
+                        // Filter for common video domains/extensions
+                        const filteredUrls = urls.filter(url => 
+                            url.includes('v.redd.it') || 
+                            url.includes('redgifs.com') || 
+                            url.endsWith('.mp4') || 
+                            url.endsWith('.m3u8') || 
+                            url.endsWith('.webm')
+                        );
+
+                        return [...new Set(filteredUrls)];
                     }");
-
-                    if (string.IsNullOrWhiteSpace(jsonContent) || !jsonContent.Trim().StartsWith("{"))
-                        throw new Exception("Invalid JSON content returned from in-page fetch.");
-
-                    rootNode = JsonNode.Parse(jsonContent);
                 }
             }
             catch (Exception ex)
@@ -94,108 +116,45 @@ namespace Siphon.Services.LegacyDownloaders
                 if (browser != null) await browser.CloseAsync();
             }
 
-            if (rootNode == null) throw new Exception("API returned empty data.");
+            if (videoUrls == null || videoUrls.Length == 0)
+                throw new Exception("No video files or valid embeds found on this Reddit post.");
 
-            // --- CHANGED LOGIC START ---
             var videosToDownload = new List<(string Path, string Name)>();
 
-            var mainFile = rootNode["file"];
-            if (mainFile != null && mainFile["path"] != null)
+            foreach (var vUrl in videoUrls)
             {
-                string path = mainFile["path"].ToString();
-                string name = mainFile["name"]?.ToString();
-                if (IsVideo(path))
-                {
-                    videosToDownload.Add((path, name));
-                }
+                var uri = new Uri(_url);
+                var segments = uri.Segments;
+                string postId = segments.Length > 3 ? segments[3].Trim('/') : "reddit_video";
+
+                string nameSuffix = vUrl.Contains("redgifs.com") ? "_redgifs" : "";
+
+                videosToDownload.Add((vUrl, $"{postId}{nameSuffix}"));
             }
-
-            var attachments = rootNode["attachments"]?.AsArray();
-            if (attachments != null)
-            {
-                foreach (var att in attachments)
-                {
-                    string path = att["path"]?.ToString();
-                    string name = att["name"]?.ToString();
-
-                    if (!string.IsNullOrEmpty(path) && IsVideo(path))
-                    {
-                        if (!videosToDownload.Any(v => v.Path == path))
-                        {
-                            videosToDownload.Add((path, name));
-                        }
-                    }
-                }
-            }
-            // --- CHANGED LOGIC END ---
-
-            if (videosToDownload.Count == 0) throw new Exception("No video files found.");
 
             int count = 1;
             int total = videosToDownload.Count;
-
-            var baseUri = new Uri(_url);
-            string downloadBase = $"{baseUri.Scheme}://{baseUri.Host}";
-            string mainFileName = "";
 
             foreach (var video in videosToDownload)
             {
                 token.ThrowIfCancellationRequested();
 
-                string downloadUrl = video.Path.StartsWith("http") ? video.Path : $"{downloadBase}{video.Path}";
+                string downloadUrl = video.Path;
 
-                if (video.Name.Contains(".gif"))
-                {
-                    continue;
-                }
+                // Process through RedGIFs resolver if applicable before downloading
+                downloadUrl = await SharedScraperLogic.ResolveRedGifsUrlAsync(downloadUrl, token);
 
-                string rawFileName = video.Name;
+                string nameWithoutExt = video.Name;
 
-                // Fallback to ?f= parameter
-                if (string.IsNullOrWhiteSpace(rawFileName) && downloadUrl.Contains("?f="))
-                {
-                    var parts = downloadUrl.Split("?f=");
-                    if (parts.Length > 1) rawFileName = parts[1];
-                }
-
-                // Fallback to URL path hash
-                if (string.IsNullOrWhiteSpace(rawFileName))
-                {
-                    rawFileName = Path.GetFileName(new Uri(downloadUrl).LocalPath);
-                }
-
-                string ext = Path.GetExtension(rawFileName);
-                if (ext == "gif")
-                {
-                    continue;
-                }
-                if (string.IsNullOrEmpty(ext)) ext = ".mp4";
-
-                string nameWithoutExt = Path.GetFileName(rawFileName);
-
-                if (total > 1 && videosToDownload.Count(v => v.Name == video.Name) > 1)
-                {
-                    nameWithoutExt = $"{nameWithoutExt}_{count}";
-                }
-
-                if (string.IsNullOrWhiteSpace(nameWithoutExt))
-                {   
-                    nameWithoutExt = $"{_job.Url.Split('/').LastOrDefault()}";
-                }
+                if (total > 1) nameWithoutExt = $"{nameWithoutExt}_{count}";
 
                 string cleanName = SharedScraperLogic.SanitizeFileName(nameWithoutExt, _downloadPath);
+                string ext = ".mp4";
 
-                //falback if name in post is not compatable with downloader as post id will be compatable at its an int
-                if (cleanName == "mp4" || cleanName == "mp4.mp4" || cleanName.ToLower() == "mp4".ToLower() || cleanName.ToLower() == "mp4.mp4".ToLower())
+                string rawExt = Path.GetExtension(new Uri(downloadUrl).LocalPath);
+                if (!string.IsNullOrEmpty(rawExt) && IsVideo(rawExt))
                 {
-                    if (count > 1)
-                    {
-                        cleanName = $"{_job.Url.Split('/').LastOrDefault()}_{count}";
-                    }
-                    else
-                    {
-                        cleanName = $"{_job.Url.Split('/').LastOrDefault()}";
-                    }
+                    ext = rawExt;
                 }
 
                 string finalFileName = $"{cleanName}{ext}";
@@ -205,19 +164,14 @@ namespace Siphon.Services.LegacyDownloaders
                 _job.FinalFilePath = fullFilePath;
                 _job.Status = (total > 1) ? $"Downloading {count}/{total}: {cleanName}" : $"Downloading: {cleanName}";
 
-                if (count == 1)
-                {
-                    mainFileName = cleanName; // Store the first file's name for potential use in renaming the final output after conversion
-                }
-
                 try
                 {
                     await SharedScraperLogic.DownloadWithProgressAsync(downloadUrl, fullFilePath, _url, cleanName, 1, _job, token);
                     _logger.LogInformation($"Downloaded file {count}/{total}: {finalFileName}");
+
                     if (!ext.Equals(".mp4", StringComparison.OrdinalIgnoreCase))
                     {
                         _logger.LogInformation($"Converting {finalFileName} to MP4 format...");
-                        // This handles the conversion and deletes the old file
                         string newPath = await SharedScraperLogic.ConvertToMp4Async(fullFilePath, _job, token, _env);
                         _job.FinalFilePath = newPath;
                     }
@@ -227,6 +181,7 @@ namespace Siphon.Services.LegacyDownloaders
                     _job.Status = $"Failed file {count}: {ex.Message}";
                     await Task.Delay(2000, token);
                 }
+
                 AddURLToPendingFiles(cleanName, _url);
                 count++;
             }
@@ -260,7 +215,7 @@ namespace Siphon.Services.LegacyDownloaders
             if (string.IsNullOrEmpty(path)) return false;
             string cleanPath = path.Split('?')[0];
             string ext = Path.GetExtension(cleanPath).ToLower();
-            return ext == ".mp4" || ext == ".m4v" || ext == ".mov" || ext == ".webm" || ext == ".mkv";
+            return ext == ".mp4" || ext == ".m4v" || ext == ".mov" || ext == ".webm" || ext == ".mkv" || ext == ".m3u8";
         }
     }
 }

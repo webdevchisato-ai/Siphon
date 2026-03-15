@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services.LegacyDownloaders.Video
 {
     public class HentaiDudeDownloader
     {

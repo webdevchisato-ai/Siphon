@@ -1,10 +1,11 @@
 ﻿using System.Diagnostics;
 using System.Net;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Siphon.Extensions;
 
-namespace Siphon.Services
+namespace Siphon.Services.LegacyDownloaders.Video
 {
     public static class SharedScraperLogic
     {
@@ -30,6 +31,47 @@ namespace Siphon.Services
             }
 
             return string.IsNullOrWhiteSpace(cleanName) ? "Video_Download" : cleanName;
+        }
+
+        public static async Task<string> ResolveRedGifsUrlAsync(string url, CancellationToken token)
+        {
+            if (!url.Contains("redgifs.com/watch/")) return url;
+
+            var match = Regex.Match(url, @"watch/([a-zA-Z0-9]+)");
+            if (!match.Success) return url;
+            string id = match.Groups[1].Value.ToLower();
+
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+
+            try
+            {
+                // 1. Get temporary auth token
+                var authResp = await client.GetAsync("https://api.redgifs.com/v2/auth/temporary", token);
+                if (!authResp.IsSuccessStatusCode) return url;
+
+                var authJson = await authResp.Content.ReadAsStringAsync(token);
+                var authObj = JsonNode.Parse(authJson);
+                string accessToken = authObj?["token"]?.ToString();
+
+                if (string.IsNullOrEmpty(accessToken)) return url;
+
+                // 2. Get GIF metadata
+                client.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
+                var gifResp = await client.GetAsync($"https://api.redgifs.com/v2/gifs/{id}", token);
+                if (!gifResp.IsSuccessStatusCode) return url;
+
+                var gifJson = await gifResp.Content.ReadAsStringAsync(token);
+                var gifObj = JsonNode.Parse(gifJson);
+
+                // Extract the HD mp4 url
+                string mp4Url = gifObj?["gif"]?["urls"]?["hd"]?.ToString();
+                return !string.IsNullOrEmpty(mp4Url) ? mp4Url : url;
+            }
+            catch
+            {
+                return url; // Fallback to original url if API fails
+            }
         }
 
         public static async Task DownloadWithProgressAsync(string url, string path, string refUrl, string name, int attempt, DownloadJob job, CancellationToken token)

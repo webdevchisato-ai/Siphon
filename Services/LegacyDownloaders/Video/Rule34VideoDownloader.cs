@@ -2,7 +2,7 @@
 using PuppeteerSharp;
 using System.Text.RegularExpressions;
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services.LegacyDownloaders.Video
 {
     public class Rule34VideoDownloader
     {

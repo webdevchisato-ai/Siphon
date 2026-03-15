@@ -1,10 +1,9 @@
 ﻿using PuppeteerSharp;
-using Siphon.Services;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Web; // Required for URL decoding if needed
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services.LegacyDownloaders.Video
 {
     public class CoomerDownloader
     {

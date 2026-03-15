@@ -1,6 +1,6 @@
 ﻿using PuppeteerSharp;
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services.LegacyDownloaders.Video
 {
     public class PornHubDownloader
     {

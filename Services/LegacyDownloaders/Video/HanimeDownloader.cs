@@ -3,9 +3,9 @@ using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using System.Linq;
-using System.Net.Http; // Required for checking the API
+using System.Net.Http;
 
-namespace Siphon.Services.LegacyDownloaders
+namespace Siphon.Services.LegacyDownloaders.Video
 {
     public class HanimeDownloader
     {

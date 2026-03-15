@@ -10,177 +10,274 @@
 @Html.AntiForgeryToken()
 
 <style>
-    .post-card {
-        transition: transform 0.2s;
-        cursor: context-menu;
+        .post-card {
+                transition: transform 0.2s;
+                cursor: context-menu;
+
     }
 
-        .post-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
+            .post-card:hover {
+                    transform: translateY(-4px);
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+
+    }
+
+
     /* Context Menu Styles */
-    #context-menu {
-        display: none;
-        position: fixed;
-        z-index: 9999;
-        background: #222;
-        border: 1px solid #444;
-        border-radius: 6px;
-        min-width: 160px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        padding: 5px 0;
+        #context-menu {
+                display: none;
+                position: fixed;
+                z-index: 9999;
+                background: #222;
+                border: 1px solid #444;
+                border-radius: 6px;
+                min-width: 160px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                padding: 5px 0;
+
     }
 
-        #context-menu button {
-            text-align: left;
-            width: 100%;
-            background: none;
-            border: none;
-            padding: 8px 15px;
-            color: #ddd;
-            transition: background 0.1s;
+                #context-menu button {
+                        text-align: left;
+                        width: 100%;
+                        background: none;
+                        border: none;
+                        padding: 8px 15px;
+                        color: #ddd;
+                        transition: background 0.1s;
+
         }
 
-            #context-menu button:hover {
-                background: #333;
-                color: #fff;
-            }
+                #context-menu button:hover {
+                        background: #333;
+                        color: #fff;
+
+    }
+
 
     /* Success Badge Animation */
-    .queued-badge {
-        display: none;
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(25, 135, 84, 0.85);
-        color: white;
-        z-index: 20;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-        backdrop-filter: blur(2px);
-        transition: opacity 0.3s ease;
+        .queued-badge {
+                display: none;
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(25, 135, 84, 0.85);
+                color: white;
+                z-index: 20;
+                align-items: center;
+                justify-content: center;
+                flex-direction: column;
+                backdrop-filter: blur(2px);
+                transition: opacity 0.3s ease;
+
     }
+
 
     /* Video Duration Badge */
-    .duration-badge {
-        position: absolute;
-        bottom: 8px;
-        right: 8px;
-        background: rgba(0, 0, 0, 0.75);
-        color: white;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-size: 0.75rem;
-        font-weight: bold;
-        backdrop-filter: blur(4px);
+        .duration-badge {
+                position: absolute;
+                bottom: 8px;
+                right: 8px;
+                background: rgba(0, 0, 0, 0.75);
+                color: white;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 0.75rem;
+                font-weight: bold;
+                backdrop-filter: blur(4px);
+
     }
+
 
     /* Loading skeleton for images */
-    .img-loading {
-        background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
-        background-size: 200% 100%;
-        animation: loading 1.5s infinite;
+        .img-loading {
+                background: linear-gradient(90deg, #2a2a2a 25%, #3a3a3a 50%, #2a2a2a 75%);
+                background-size: 200% 100%;
+                animation: loading 1.5s infinite;
+
     }
 
-    @@keyframes loading {
-        0% {
-            background-position: 200% 0;
+        @@keyframes loading {
+                0% {
+                        background-position: 200% 0;
+
         }
 
-        100% {
-            background-position: -200% 0;
+                100% {
+                        background-position: -200% 0;
+
         }
+
+
     }
+
 
     /* Range Slider Styles */
-    .dual-range-container {
-        position: relative;
-        height: 40px;
-        margin: 15px 0;
+        .dual-range-container {
+                position: relative;
+                height: 40px;
+                margin: 15px 0;
+
     }
 
-    .dual-range-slider {
-        position: relative;
-        width: 100%;
-        height: 6px;
-        background: #ddd;
-        border-radius: 3px;
-        margin-top: 17px;
+        .dual-range-slider {
+                position: relative;
+                width: 100%;
+                height: 6px;
+                background: #ddd;
+                border-radius: 3px;
+                margin-top: 17px;
+
     }
 
-    .dual-range-progress {
-        position: absolute;
-        height: 6px;
-        background: #0d6efd;
-        border-radius: 3px;
+        .dual-range-progress {
+                position: absolute;
+                height: 6px;
+                background: #0d6efd;
+                border-radius: 3px;
+
     }
 
-    .range-input {
-        position: absolute;
-        width: 100%;
-        height: 6px;
-        top: 17px;
-        background: none;
-        pointer-events: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        appearance: none;
+        .range-input {
+                position: absolute;
+                width: 100%;
+                height: 6px;
+                top: 17px;
+                background: none;
+                pointer-events: none;
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                appearance: none;
+
     }
 
-        .range-input::-webkit-slider-thumb {
-            height: 18px;
-            width: 18px;
-            border-radius: 50%;
-            background: #0d6efd;
-            pointer-events: auto;
-            -webkit-appearance: none;
-            cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
+            .range-input::-webkit-slider-thumb {
+                    height: 18px;
+                    width: 18px;
+                    border-radius: 50%;
+                    background: #0d6efd;
+                    pointer-events: auto;
+                    -webkit-appearance: none;
+                    cursor: pointer;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 
-        .range-input::-moz-range-thumb {
-            height: 18px;
-            width: 18px;
-            border-radius: 50%;
-            background: #0d6efd;
-            pointer-events: auto;
-            cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-    .range-values {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.75rem;
-        color: #666;
-        margin-top: 5px;
     }
 
-    .filter-disabled {
-        opacity: 0.5;
-        pointer-events: none;
+            .range-input::-moz-range-thumb {
+                    height: 18px;
+                    width: 18px;
+                    border-radius: 50%;
+                    background: #0d6efd;
+                    pointer-events: auto;
+                    cursor: pointer;
+                    border: 2px solid white;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+
     }
 
-    .video-length-inputs {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        margin-bottom: 8px;
+        .range-values {
+                display: flex;
+                justify-content: space-between;
+                font-size: 0.75rem;
+                color: #666;
+                margin-top: 5px;
+
     }
 
-        .video-length-inputs input {
-            flex: 1;
-            text-align: center;
-        }
+        .filter-disabled {
+                opacity: 0.5;
+                pointer-events: none;
+
+    }
+
+        .video-length-inputs {
+                display: flex;
+                gap: 8px;
+                align-items: center;
+                margin-bottom: 8px;
+
+    }
+
+            .video-length-inputs input {
+                    flex: 1;
+                    text-align: center;
+
+    }
 </style>
 
 <div class="container-fluid py-4">
+    <div class="d-flex justify-content-end mb-3 gap-2">
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#settingsPanel" aria-expanded="false">
+            <i class="bi bi-gear-fill"></i> Scraper Settings
+        </button>
+    </div>
+    <div class="collapse mb-2" id="settingsPanel" data-bs-parent=".container">
+        <div class="card card-body bg-light border-0 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="card-title mb-0">Scraper Configuration</h6>
+                <button type="button" class="btn btn-outline-dark btn-sm" onclick="reloadConfig()" id="btnHotReload">
+                    <i class="bi bi-arrow-clockwise"></i> Hot Reload Config
+                </button>
+            </div>
+
+            <form method="post" asp-page-handler="UpdateSettings">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">PHPSESSID (Eporner)</label>
+                        <input type="text" class="form-control" asp-for="_phpssessid" placeholder="Cookie..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">EPRNS (Eporner)</label>
+                        <input type="text" class="form-control" asp-for="_eprns" placeholder="Cookie..." />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Session (Coomer)</label>
+                        <input type="text" class="form-control" asp-for="_coomerSession" placeholder="Coomer 'session' cookie..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Session (Kemono)</label>
+                        <input type="text" class="form-control" asp-for="_kemonoSession" placeholder="Kemono 'session' cookie..." />
+                    </div>
+
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">CF_CLEARANCE (HentaiDude)</label>
+                        <input type="text" class="form-control" asp-for="_cfClearence" placeholder="HentaiDude 'clearence' cookie..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">MANGAVIEW_COOKIE (HentaiDude)</label>
+                        <input type="text" class="form-control" asp-for="_mangaViewCookie" placeholder="HentaiDude 'manga' cookie..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Agent (HentaiDude)</label>
+                        <input type="text" class="form-control" asp-for="_hentaiDudeAgent" placeholder="HentaiDude 'agent' header..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">User ID (Rule34.xxx)</label>
+                        <input type="text" class="form-control" asp-for="_rule34UserId" placeholder="Rule34 userID..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">API Key (Rule34.xxx)</label>
+                        <input type="text" class="form-control" asp-for="_rule34ApiKey" placeholder="Rule34 API Key..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">"reddit_session"" Cookie (Reddit)</label>
+                        <input type="text" class="form-control" asp-for="_redditCookie" placeholder="Reddit Session..." />
+                    </div>
+
+                    <div class="col-md-10 d-flex align-items-end">
+                        <button type="submit" class="btn btn-dark w-100">
+                            <i class="bi bi-save"></i> Save Settings
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="row">
         <div class="col-md-3 col-lg-2">
             <div class="card shadow-sm border-0 mb-4 sticky-top" style="top: 20px; z-index: 100;">
@@ -205,6 +302,7 @@
                             <select asp-for="Site" id="siteSelect" class="form-select form-select-sm">
                                 <option value="kemono.cr">Kemono.cr</option>
                                 <option value="coomer.st">Coomer.st</option>
+                                <option value="rule34.xxx">Rule34.xxx</option>
                             </select>
                         </div>
 
@@ -321,12 +419,12 @@
 
             <div class="d-flex justify-content-center my-5 gap-2" id="paginationControls" style="display: none;">
                 <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
-                   class="btn btn-outline-dark px-4" id="btnLoadPrev">
+                             class="btn btn-outline-dark px-4" id="btnLoadPrev">
                     <i class="bi bi-arrow-left"></i> Previous
                 </a>
 
                 <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
-                   class="btn btn-dark px-4" id="btnLoadMore">
+                             class="btn btn-dark px-4" id="btnLoadMore">
                     Load More <i class="bi bi-arrow-right"></i>
                 </a>
             </div>
@@ -588,12 +686,26 @@
         });
     }
 
+    function updateSearchLabels() {
+        const searchInput = document.getElementById('SearchUser');
+        const searchLabel = searchInput.previousElementSibling;
+        if (siteSelect.value === 'rule34.xxx') {
+            searchLabel.innerText = "Tags (Space separated)";
+            searchInput.placeholder = "e.g. animated high_res";
+        } else {
+            searchLabel.innerText = "User ID or Name";
+            searchInput.placeholder = "e.g. 3295915";
+        }
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         updateServiceOptions();
+        updateSearchLabels();
     });
 
     siteSelect.addEventListener('change', () => {
         updateServiceOptions();
+        updateSearchLabels();
     });
 
     // --- 4. VIDEO SLIDER LOGIC ---

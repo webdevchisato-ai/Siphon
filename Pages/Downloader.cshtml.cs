@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Siphon.Services;
 using System;
+using System.Data;
 
 namespace Siphon.Pages
 {
@@ -50,6 +51,9 @@ namespace Siphon.Pages
 
         [BindProperty]
         public int Threads { get; set; } = 3; // Default
+        [BindProperty] public string RULE34APIKEY { get; set; }
+        [BindProperty] public string RULE34USERID { get; set; }
+        [BindProperty] public string REDDITCOOKIE { get; set; }
 
         public void OnGet()
         {
@@ -169,6 +173,9 @@ namespace Siphon.Pages
                         if (trimmed.StartsWith("CF_CLEARANCE=")) CF_CLEARANCE = trimmed.Substring(13).Trim();
                         if (trimmed.StartsWith("MANGAVIEW_COOKIE=")) MANGAVIEW_COOKIE = trimmed.Substring(17).Trim();
                         if (trimmed.StartsWith("HENTAI_DUDE_AGENT=")) HentaiDudeAgent = trimmed.Substring(18).Trim();
+                        if (trimmed.StartsWith("RULE34_USER_ID=")) RULE34USERID = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("RULE34_API_KEY=")) RULE34APIKEY = trimmed.Substring(15).Trim();
+                        if (trimmed.StartsWith("REDDIT_COOKIE=")) REDDITCOOKIE = trimmed.Substring(14).Trim();
                         if (trimmed.StartsWith("THREADS="))
                         {
                             if (int.TryParse(trimmed.Substring(8).Trim(), out int t)) Threads = t;
@@ -193,6 +200,9 @@ namespace Siphon.Pages
                     $"CF_CLEARANCE={CF_CLEARANCE}",
                     $"MANGAVIEW_COOKIE={MANGAVIEW_COOKIE}",
                     $"HENTAI_DUDE_AGENT={HentaiDudeAgent}",
+                    $"RULE34_USER_ID={RULE34USERID}",
+                    $"RULE34_API_KEY={RULE34APIKEY}",
+                    $"REDDIT_COOKIE={REDDITCOOKIE}",
                     "PATH=/app/wwwroot/Pending"
                 };
 
