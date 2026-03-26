@@ -796,6 +796,18 @@
                         reinitLazyLoading();
                         paginationControls.style.display = 'flex';
 
+                        // --- RESTORE SCROLL POSITION ---
+                        if (document.getElementById('viewModeSelect').value === 'artists') {
+                            const savedScroll = sessionStorage.getItem('artistScrollPosition');
+                            if (savedScroll !== null) {
+                                setTimeout(() => {
+                                    window.scrollTo(0, parseInt(savedScroll, 10));
+                                    sessionStorage.removeItem('artistScrollPosition');
+                                }, 100); // 100ms gives the browser enough time to paint the innerHTML
+                            }
+                        }
+                        // -------------------------------
+
                         statusAlert.className = 'alert alert-success d-flex align-items-center shadow';
                         statusIcon.className = 'bi bi-check-circle-fill flex-shrink-0 me-3 fs-3';
                         statusHeader.innerText = "Complete";
@@ -888,6 +900,9 @@
             }
 
             function showPostsForArtist(id, service) {
+                // --- SAVE SCROLL POSITION ---
+                sessionStorage.setItem('artistScrollPosition', window.scrollY);
+
                 document.getElementById('viewModeSelect').value = 'posts';
                 document.getElementById('serviceSelect').value = service;
                 document.getElementById('SearchUser').value = id;
