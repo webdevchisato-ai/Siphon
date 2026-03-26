@@ -404,15 +404,13 @@
                     </div>
 
                     <div class="d-flex justify-content-center my-5 gap-2" id="paginationControls" style="display: none;">
-                        <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@prevOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
-                               class="btn btn-outline-dark px-4" id="btnLoadPrev">
+                        <button type="button" class="btn btn-outline-dark px-4" id="btnLoadPrev" onclick="loadPrevPage()">
                             <i class="bi bi-arrow-left"></i> Previous
-                        </a>
+                        </button>
 
-                        <a href="?Site=@Model.Site&ServiceType=@Model.ServiceType&SearchUser=@Model.SearchUser&OnlyVideos=@Model.OnlyVideos&MinAttachments=@Model.MinAttachments&EnableVideoLengthFilter=@Model.EnableVideoLengthFilter&MinVideoLength=@Model.MinVideoLength&MaxVideoLength=@Model.MaxVideoLength&Offset=@nextOffset&SearchTriggered=true&ViewMode=@Model.ViewMode&ReturnToArtists=@Model.ReturnToArtists.ToString().ToLower()&ArtistOffset=@Model.ArtistOffset&ArtistSortMode=@Model.ArtistSortMode"
-                               class="btn btn-dark px-4" id="btnLoadMore">
+                        <button type="button" class="btn btn-dark px-4" id="btnLoadMore" onclick="loadNextPage()">
                             Load More <i class="bi bi-arrow-right"></i>
-                        </a>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -822,13 +820,33 @@
                 }
             }
 
+            // --- PAGINATION TIED TO FILTER FORM ---
+            let dynamicNextOffset = @(Model.Offset + 50);
+
             function updatePaginationLinks(newNextOffset) {
-                const btnMore = document.getElementById('btnLoadMore');
-                if (btnMore) {
-                    const url = new URL(btnMore.href);
-                    url.searchParams.set("Offset", newNextOffset);
-                    btnMore.href = url.toString();
+                dynamicNextOffset = newNextOffset;
+                const currentOffset = parseInt(document.getElementById('Offset').value) || 0;
+                const btnPrev = document.getElementById('btnLoadPrev');
+                
+                // Hide the Previous button if we are at the beginning
+                if (currentOffset <= 0) {
+                    btnPrev.style.display = 'none';
+                } else {
+                    btnPrev.style.display = '';
                 }
+            }
+
+            function loadNextPage() {
+                document.getElementById('Offset').value = dynamicNextOffset;
+                document.getElementById('filterForm').submit();
+            }
+
+            function loadPrevPage() {
+                let currentOffset = parseInt(document.getElementById('Offset').value) || 0;
+                let prev = currentOffset - 50;
+                if (prev < 0) prev = 0;
+                document.getElementById('Offset').value = prev;
+                document.getElementById('filterForm').submit();
             }
 
             // --- 3. CONTEXT MENU LOGIC ---
