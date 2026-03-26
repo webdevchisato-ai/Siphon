@@ -112,7 +112,7 @@ else
                             @if (!string.IsNullOrEmpty(post.ThumbnailUrl))
                             {
                                 <img data-src="?handler=ProxyImage&url=@System.Web.HttpUtility.UrlEncode(post.ThumbnailUrl)"
-                                     data-duration="@(post.HasVideo? post.ThumbnailUrl: "")"
+                                     data-duration="@(post.HasVideo ? (post.FirstVideoUrl ?? post.ThumbnailUrl) : "")"
                                      class="lazy-image w-100 h-100 img-loading"
                                      style="object-fit: cover;"
                                      alt="Post Thumbnail" />

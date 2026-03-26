@@ -29,6 +29,7 @@ namespace Siphon.Services.LookupServices
             public string User { get; set; }
             public string Service { get; set; }
             public string ThumbnailUrl { get; set; }
+            public string FirstVideoUrl { get; set; }
             public string OriginalUrl { get; set; }
             public int AttachmentCount { get; set; }
             public bool HasVideo { get; set; }
@@ -79,7 +80,6 @@ namespace Siphon.Services.LookupServices
                 }
 
                 // Navigate to homepage to prime cookies/Cloudflare
-                //_logger.LogInformation($"Navigating to homepage of {Domain} to prime cookies...");
                 await page.GoToAsync($"https://{Domain}", new NavigationOptions
                 {
                     WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded }
@@ -293,25 +293,31 @@ namespace Siphon.Services.LookupServices
                         OriginalUrl = $"https://{Domain}/{service}/user/{userId}/post/{postId}"
                     };
 
-                    string fPath = node["file"]?["path"]?.ToString();
-                    bool videoInMain = IsVideo(fPath);
-                    bool videoInAtt = false;
+                    string firstVideoUrl = null;
+                    string thumbnailUrl = null;
+
+                    var fileNode = node["file"];
+                    if (fileNode != null)
+                    {
+                        string path = fileNode["path"]?.ToString();
+                        if (IsImage(path)) thumbnailUrl = $"https://{ImageDomain}/thumbnail/data{path}";
+                        if (IsVideo(path)) firstVideoUrl = $"https://{Domain}/data{path}";
+                    }
 
                     var atts = node["attachments"]?.AsArray();
                     if (atts != null)
                     {
                         foreach (var att in atts)
                         {
-                            if (IsVideo(att["path"]?.ToString()))
-                            {
-                                videoInAtt = true;
-                                break;
-                            }
+                            string path = att["path"]?.ToString();
+                            if (IsImage(path) && thumbnailUrl == null) thumbnailUrl = $"https://{ImageDomain}/thumbnail/data{path}";
+                            if (IsVideo(path) && firstVideoUrl == null) firstVideoUrl = $"https://{Domain}/data{path}";
                         }
                     }
 
-                    post.HasVideo = videoInMain || videoInAtt;
-                    post.ThumbnailUrl = GetThumbnailFromNode(node);
+                    post.HasVideo = firstVideoUrl != null;
+                    post.FirstVideoUrl = firstVideoUrl;
+                    post.ThumbnailUrl = thumbnailUrl ?? firstVideoUrl;
 
                     resultsBag.Add(post);
                 }
@@ -374,32 +380,6 @@ namespace Siphon.Services.LookupServices
             });
 
             return resultsBag.ToList();
-        }
-
-        private string GetThumbnailFromNode(JsonNode node)
-        {
-            string firstVideoUrl = null;
-
-            var fileNode = node["file"];
-            if (fileNode != null)
-            {
-                string path = fileNode["path"]?.ToString();
-                if (IsImage(path)) return $"https://{ImageDomain}/thumbnail/data{path}";
-                if (IsVideo(path) && firstVideoUrl == null) firstVideoUrl = $"https://{Domain}/data{path}";
-            }
-
-            var atts = node["attachments"]?.AsArray();
-            if (atts != null)
-            {
-                foreach (var att in atts)
-                {
-                    string path = att["path"]?.ToString();
-                    if (IsImage(path)) return $"https://{ImageDomain}/thumbnail/data{path}";
-                    if (IsVideo(path) && firstVideoUrl == null) firstVideoUrl = $"https://{Domain}/data{path}";
-                }
-            }
-
-            return firstVideoUrl;
         }
 
         private bool IsImage(string path)

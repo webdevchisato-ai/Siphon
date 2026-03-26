@@ -43,6 +43,7 @@ namespace Siphon.Services.LookupServices
             public string User { get; set; }
             public string Service { get; set; }
             public string ThumbnailUrl { get; set; }
+            public string FirstVideoUrl { get; set; }
             public string OriginalUrl { get; set; }
             public int AttachmentCount { get; set; }
             public bool HasVideo { get; set; }
@@ -209,6 +210,7 @@ namespace Siphon.Services.LookupServices
                             AttachmentCount = 1,
                             HasVideo = hasVideo,
                             VideoDuration = duration,
+                            FirstVideoUrl = hasVideo ? fileUrl : null,
                             ThumbnailUrl = thumbnailUrl,
                             PageAfterToken = nextAfter // <--- Attach token to the post to be cached
                         };

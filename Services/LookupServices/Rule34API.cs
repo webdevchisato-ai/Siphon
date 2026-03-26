@@ -27,6 +27,7 @@ namespace Siphon.Services.LookupServices
             public string User { get; set; }
             public string Service { get; set; }
             public string ThumbnailUrl { get; set; }
+            public string FirstVideoUrl { get; set; }
             public string OriginalUrl { get; set; }
             public int AttachmentCount { get; set; }
             public bool HasVideo { get; set; }
@@ -43,8 +44,8 @@ namespace Siphon.Services.LookupServices
                 string tagQuery = string.IsNullOrWhiteSpace(tags) ? "index" : Uri.EscapeDataString(tags);
                 string apiUrl = $"https://api.rule34.xxx/index.php?page=dapi&s=post&q=index&json=1&limit={limit}&pid={pid}&tags={tagQuery}";
 
-                // Append API key and User ID if they exist in config
-                if (!string.IsNullOrWhiteSpace(_userId) && !string.IsNullOrWhiteSpace(_apiKey))
+                // Append API key and User ID if they exist in config
+                if (!string.IsNullOrWhiteSpace(_userId) && !string.IsNullOrWhiteSpace(_apiKey))
                 {
                     apiUrl += $"&user_id={_userId}&api_key={_apiKey}";
                 }
@@ -95,12 +96,12 @@ namespace Siphon.Services.LookupServices
                             OriginalUrl = $"https://rule34.xxx/index.php?page=post&s=view&id={id}",
                             AttachmentCount = 1,
                             HasVideo = hasVideo,
-                            // Send the raw video URL to the thumbnail handler if it's a video, otherwise use the preview URL
-                            ThumbnailUrl = hasVideo ? fileUrl : (node["preview_url"]?.ToString() ?? fileUrl)
+                            FirstVideoUrl = hasVideo ? fileUrl : null,
+                            ThumbnailUrl = node["preview_url"]?.ToString() ?? fileUrl
                         };
 
-                        // Approximate published date from unix timestamp if available (change field)
-                        if (long.TryParse(node["change"]?.ToString(), out long unixTime))
+                        // Approximate published date from unix timestamp if available (change field)
+                        if (long.TryParse(node["change"]?.ToString(), out long unixTime))
                         {
                             post.Published = DateTimeOffset.FromUnixTimeSeconds(unixTime).DateTime;
                         }

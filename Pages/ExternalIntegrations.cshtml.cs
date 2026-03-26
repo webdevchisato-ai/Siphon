@@ -147,12 +147,13 @@ namespace Siphon.Pages
             public string User { get; set; }
             public string Service { get; set; }
             public string ThumbnailUrl { get; set; }
+            public string FirstVideoUrl { get; set; }
             public string OriginalUrl { get; set; }
             public int AttachmentCount { get; set; }
             public bool HasVideo { get; set; }
             public DateTime Published { get; set; }
             public double VideoDuration { get; set; } = 0;
-            public string PageAfterToken { get; set; } // <--- Added
+            public string PageAfterToken { get; set; }
         }
 
         public class ExternalCreator
@@ -658,7 +659,8 @@ namespace Siphon.Pages
 
         private async Task EnrichWithVideoDurations(List<ExternalPost> posts, Func<string, Task> progressCallback = null)
         {
-            var videoPosts = posts.Where(p => p.HasVideo && p.VideoDuration == 0 && !string.IsNullOrEmpty(p.ThumbnailUrl)).ToList();
+            // Now checks for either FirstVideoUrl OR ThumbnailUrl
+            var videoPosts = posts.Where(p => p.HasVideo && p.VideoDuration == 0 && (!string.IsNullOrEmpty(p.FirstVideoUrl) || !string.IsNullOrEmpty(p.ThumbnailUrl))).ToList();
 
             if (!videoPosts.Any()) return;
 
@@ -674,7 +676,8 @@ namespace Siphon.Pages
             {
                 try
                 {
-                    string videoUrl = post.ThumbnailUrl;
+                    // Prioritize actual video URL over Thumbnail for duration probing
+                    string videoUrl = !string.IsNullOrEmpty(post.FirstVideoUrl) ? post.FirstVideoUrl : post.ThumbnailUrl;
 
                     if (videoUrl.Contains("redgifs.com"))
                     {
@@ -799,6 +802,7 @@ namespace Siphon.Pages
                 User = r.User,
                 Service = r.Service,
                 ThumbnailUrl = r.ThumbnailUrl,
+                FirstVideoUrl = r.FirstVideoUrl,
                 OriginalUrl = r.OriginalUrl,
                 AttachmentCount = r.AttachmentCount,
                 HasVideo = r.HasVideo,
@@ -816,6 +820,7 @@ namespace Siphon.Pages
                 User = r.User,
                 Service = r.Service,
                 ThumbnailUrl = r.ThumbnailUrl,
+                FirstVideoUrl = r.FirstVideoUrl,
                 OriginalUrl = r.OriginalUrl,
                 AttachmentCount = r.AttachmentCount,
                 HasVideo = r.HasVideo,
@@ -833,6 +838,7 @@ namespace Siphon.Pages
                 User = r.User,
                 Service = r.Service,
                 ThumbnailUrl = r.ThumbnailUrl,
+                FirstVideoUrl = r.FirstVideoUrl,
                 OriginalUrl = r.OriginalUrl,
                 AttachmentCount = r.AttachmentCount,
                 HasVideo = r.HasVideo,
@@ -850,6 +856,7 @@ namespace Siphon.Pages
                 User = r.User,
                 Service = r.Service,
                 ThumbnailUrl = r.ThumbnailUrl,
+                FirstVideoUrl = r.FirstVideoUrl,
                 OriginalUrl = r.OriginalUrl,
                 AttachmentCount = r.AttachmentCount,
                 HasVideo = r.HasVideo,
