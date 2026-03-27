@@ -27,6 +27,7 @@ namespace Siphon.Pages
         private readonly IWebHostEnvironment _env;
         private readonly ICompositeViewEngine _viewEngine;
         private readonly ITempDataProvider _tempDataProvider;
+        private readonly UserService _userService;
 
         private readonly string _configPath;
         private readonly string _redditRegistryPath;
@@ -45,6 +46,7 @@ namespace Siphon.Pages
 
         private static readonly SemaphoreSlim _thumbGenerationLock = new SemaphoreSlim(3);
         private static readonly ConcurrentDictionary<string, double> _durationCache = new ConcurrentDictionary<string, double>();
+        private static readonly object _previewCacheLock = new object();
 
         public ExternalIntegrationsModel(
          ILogger<ExternalIntegrationsModel> logger,
@@ -55,7 +57,8 @@ namespace Siphon.Pages
          DownloadManager downloadManager,
          IWebHostEnvironment environment,
          ICompositeViewEngine viewEngine,
-         ITempDataProvider tempDataProvider)
+         ITempDataProvider tempDataProvider,
+         UserService userService)
         {
             _logger = logger;
             _kemonoLogger = kemonoLogger;
@@ -68,6 +71,7 @@ namespace Siphon.Pages
             _tempDataProvider = tempDataProvider;
             _configPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "scraper_config.txt");
             _redditRegistryPath = Path.Combine(Directory.GetCurrentDirectory(), "Config", "reddit_registry.json");
+            _userService = userService;
 
             LoadConfig();
             EnsureRegistryExists();
@@ -118,6 +122,9 @@ namespace Siphon.Pages
         [BindProperty(SupportsGet = true)]
         public int MaxVideoLength { get; set; } = 10000;
 
+        [BindProperty(SupportsGet = true)]
+        public bool GeneratePreviews { get; set; } = true;
+
         public bool IsSearchTimeout { get; set; } = false;
 
         [BindProperty]
@@ -149,6 +156,7 @@ namespace Siphon.Pages
             public string ThumbnailUrl { get; set; }
             public string FirstVideoUrl { get; set; }
             public string OriginalUrl { get; set; }
+            public string PreviewUrl { get; set; }
             public int AttachmentCount { get; set; }
             public bool HasVideo { get; set; }
             public DateTime Published { get; set; }
@@ -181,7 +189,10 @@ namespace Siphon.Pages
             public string Url { get; set; }
         }
 
-        public void OnGet() { }
+        public void OnGet() 
+        {
+            GeneratePreviews = _userService.GetLookupPreviewGenerationStatus();
+        }
 
         // --- Reddit Registry Handlers ---
 
@@ -313,11 +324,23 @@ namespace Siphon.Pages
         {
             Response.ContentType = "text/event-stream";
 
+            // Important: Thread-safe locking required to prevent ASP.NET Core from throwing
+            // 'Concurrent reads or writes are not supported' when our 20 ffmpeg threads try to reply.
+            using var sseLock = new SemaphoreSlim(1, 1);
+
             async Task SendEvent(string type, string payload)
             {
-                var json = JsonSerializer.Serialize(new { type, payload });
-                await Response.WriteAsync($"data: {json}\n\n");
-                await Response.Body.FlushAsync();
+                await sseLock.WaitAsync();
+                try
+                {
+                    var json = JsonSerializer.Serialize(new { type, payload });
+                    await Response.WriteAsync($"data: {json}\n\n");
+                    await Response.Body.FlushAsync();
+                }
+                finally
+                {
+                    sseLock.Release();
+                }
             }
 
             TimeOutHeader = "";
@@ -411,7 +434,8 @@ namespace Siphon.Pages
                 await SendEvent("status", "Rendering results...");
 
                 string htmlContent = await RenderPartialToStringAsync("_PostGrid", this);
-                await SendEvent("result", htmlContent);
+                await SendEvent("htmlGrid", htmlContent);
+                await SendEvent("complete", "Loaded successfully.");
                 return new EmptyResult();
             }
 
@@ -619,14 +643,155 @@ namespace Siphon.Pages
 
             int correctNextOffset = Offset + 50;
             await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = correctNextOffset }));
-
             await SendEvent("status", "Rendering results...");
 
             string html = await RenderPartialToStringAsync("_PostGrid", this);
+            await SendEvent("htmlGrid", html);
 
-            await SendEvent("result", html);
+            // --- VIDEO PREVIEW GENERATION TRIGGER ---
+            if (GeneratePreviews == true)
+            {
+                var videoPostsToPreview = Posts?.Where(p => p.HasVideo).ToList() ?? new List<ExternalPost>();
+                if (videoPostsToPreview.Any())
+                {
+                    string previewDir = Path.Combine(cacheFolder, "Previews");
+                    if (!Directory.Exists(previewDir)) Directory.CreateDirectory(previewDir);
 
+                    // Creates 20 concurrent threads to crunch down ffmpeg processing
+                    await GenerateVideoPreviewsAsync(videoPostsToPreview, async (t, p) => await SendEvent(t, p), previewDir);
+                }
+            }
+
+            await SendEvent("complete", "Search completed successfully.");
             return new EmptyResult();
+        }
+
+        private async Task GenerateVideoPreviewsAsync(List<ExternalPost> videoPosts, Func<string, string, Task> sendEvent, string previewDir)
+        {
+            var semaphore = new SemaphoreSlim(20);
+            int total = videoPosts.Count;
+            int completed = 0;
+
+            _logger.LogInformation($"Starting preview generation for {total} videos.");
+            await sendEvent("status", $"Generating {total} video previews...");
+
+            var tasks = videoPosts.Select(async post =>
+            {
+                await semaphore.WaitAsync();
+                try
+                {
+                    string videoUrl = post.FirstVideoUrl ?? post.ThumbnailUrl;
+                    if (string.IsNullOrEmpty(videoUrl)) return;
+
+                    if (videoUrl.Contains("redgifs.com"))
+                    {
+                        var res = await SharedScraperLogic.ResolveRedGifsUrlWithDurationAsync(videoUrl, CancellationToken.None);
+                        if (!string.IsNullOrEmpty(res.Url)) videoUrl = res.Url;
+                    }
+
+                    using var sha = SHA256.Create();
+                    var hash = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(videoUrl)));
+                    string previewPath = Path.Combine(previewDir, $"{hash}.mp4");
+                    string relativePreviewUrl = $"/ExternalIntegrationCache/Previews/{hash}.mp4";
+
+                    if (!System.IO.File.Exists(previewPath))
+                    {
+                        EnforceCacheLimit(previewDir, 50);
+
+                        string domain = videoUrl.Contains("kemono") ? "kemono.cr" : videoUrl.Contains("coomer") ? "coomer.st" : videoUrl.Contains("rule34") ? "rule34.xxx" : "reddit.com";
+                        string cookie = videoUrl.Contains("kemono") ? _kemonoSession : videoUrl.Contains("coomer") ? _coomerSession : videoUrl.Contains("reddit.com") ? _redditCookie : "";
+
+                        string headers = $"User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36\r\n";
+                        if (videoUrl.Contains("rule34")) headers += "Referer: https://rule34.xxx/\r\n";
+                        else if (videoUrl.Contains("reddit.com") || videoUrl.Contains("v.redd.it") || videoUrl.Contains("redgifs.com")) headers += $"Referer: https://www.reddit.com/\r\nCookie: reddit_session={_redditCookie}\r\n";
+                        else headers += $"Referer: https://{domain}/\r\nCookie: session={cookie}\r\n";
+
+                        double duration = post.VideoDuration;
+                        if (duration <= 0) duration = await GetVideoDuration(videoUrl, headers);
+                        if (duration <= 0) duration = 5;
+
+                        var sb = new StringBuilder();
+                        if (duration > 10)
+                        {
+                            int t1 = (int)(duration * 0.10);
+                            int t2 = (int)(duration * 0.40);
+                            int t3 = (int)(duration * 0.70);
+                            sb.Append($"-y -headers \"{headers}\" ");
+                            sb.Append($"-ss {t1} -t 3 -i \"{videoUrl}\" ");
+                            sb.Append($"-ss {t2} -t 3 -i \"{videoUrl}\" ");
+                            sb.Append($"-ss {t3} -t 3 -i \"{videoUrl}\" ");
+                            sb.Append("-filter_complex \"[0:v][1:v][2:v]concat=n=3:v=1:a=0,scale=320:-2[v]\" ");
+                            sb.Append($"-map \"[v]\" -c:v libx264 -preset ultrafast -crf 28 -an \"{previewPath}\"");
+                        }
+                        else
+                        {
+                            sb.Append($"-y -headers \"{headers}\" -i \"{videoUrl}\" ");
+                            sb.Append($"-vf \"scale=320:-2\" -c:v libx264 -preset ultrafast -crf 28 -an \"{previewPath}\"");
+                        }
+
+                        _logger.LogInformation($"[Preview] Generating preview for {post.Id} ({videoUrl})...");
+                        await RunFfmpeg(sb.ToString());
+                        _logger.LogInformation($"[Preview] Successfully generated preview for {post.Id}.");
+                    }
+                    else
+                    {
+                        _logger.LogInformation($"[Preview] Cached preview found for {post.Id}.");
+                    }
+
+                    if (System.IO.File.Exists(previewPath))
+                    {
+                        post.PreviewUrl = relativePreviewUrl;
+                        await sendEvent("previewReady", JsonSerializer.Serialize(new { postId = post.Id, previewUrl = relativePreviewUrl }));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"[Preview] Failed for {post.Id}: {ex.Message}");
+                }
+                finally
+                {
+                    var c = Interlocked.Increment(ref completed);
+                    _logger.LogInformation($"[Preview] Progress: {c}/{total} completed.");
+                    await sendEvent("status", $"Generating video previews ({c}/{total})...");
+
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
+            _logger.LogInformation($"Finished preview generation for {total} videos.");
+        }
+
+        private void EnforceCacheLimit(string directory, int maxFiles)
+        {
+            lock (_previewCacheLock)
+            {
+                var dirInfo = new DirectoryInfo(directory);
+                if (!dirInfo.Exists) return;
+
+                var files = dirInfo.GetFiles("*.mp4").OrderBy(f => f.CreationTimeUtc).ToList();
+                if (files.Count >= maxFiles)
+                {
+                    int toRemove = files.Count - maxFiles + 1;
+                    for (int i = 0; i < toRemove; i++)
+                    {
+                        try { files[i].Delete(); } catch { }
+                    }
+                }
+            }
+        }
+
+        private async Task RunFfmpeg(string args)
+        {
+            var p = Process.Start(new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = args,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardError = true
+            });
+            await p.WaitForExitAsync();
         }
 
         private async Task<string> RenderPartialToStringAsync(string viewName, object model)
@@ -659,7 +824,6 @@ namespace Siphon.Pages
 
         private async Task EnrichWithVideoDurations(List<ExternalPost> posts, Func<string, Task> progressCallback = null)
         {
-            // Now checks for either FirstVideoUrl OR ThumbnailUrl
             var videoPosts = posts.Where(p => p.HasVideo && p.VideoDuration == 0 && (!string.IsNullOrEmpty(p.FirstVideoUrl) || !string.IsNullOrEmpty(p.ThumbnailUrl))).ToList();
 
             if (!videoPosts.Any()) return;
@@ -676,7 +840,6 @@ namespace Siphon.Pages
             {
                 try
                 {
-                    // Prioritize actual video URL over Thumbnail for duration probing
                     string videoUrl = !string.IsNullOrEmpty(post.FirstVideoUrl) ? post.FirstVideoUrl : post.ThumbnailUrl;
 
                     if (videoUrl.Contains("redgifs.com"))

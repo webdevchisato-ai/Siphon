@@ -51,6 +51,7 @@
 
                         <h6 class="text-uppercase text-muted fw-bold mb-3 small border-bottom pb-2 mt-5">Preferences</h6>
                         <div class="mb-4">
+
                             <div class="form-check form-switch">
                                 <input class="form-check-input" type="checkbox" role="switch" asp-for="generateHeatmap" id="generateHeatmap" />
                                 <label class="form-check-label fw-bold small" asp-for="generateHeatmap">
@@ -72,8 +73,6 @@
                                 </div>
                             </div>
 
-                            @*heatmap sensitivity will go here*@
-
                             <div class="form-check form-switch" style="padding-top:10px;">
                                 <input class="form-check-input" type="checkbox" role="switch" asp-for="PendingRetentionEnabled" id="PendingRetentionEnabled" />
                                 <label class="form-check-label fw-bold small" asp-for="PendingRetentionEnabled">
@@ -86,6 +85,15 @@
                                     Enabled Retention Policy for Approved Files
                                 </label>
                             </div>
+
+
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" asp-for="LookupPreviewGeneration" id="generatePreviewLookup" />
+                                <label class="form-check-label fw-bold small" asp-for="LookupPreviewGeneration">
+                                    Generate Video Previews for posts in the lookup system
+                                </label>
+                            </div>
+
                         </div>
 
                         <div class="mb-4">

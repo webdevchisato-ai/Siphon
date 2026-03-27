@@ -109,25 +109,30 @@ else
                                 <span class="fw-bold">Queued!</span>
                             </div>
 
+                            <div class="preview-indicator" id="preview-icon-@post.Id" style="display: none; position: absolute; top: 8px; left: 8px; z-index: 10; background: rgba(0,0,0,0.6); border-radius: 4px; padding: 2px 6px; color: #0dcaf0; font-size: 0.75rem;">
+                                <i class="bi bi-film"></i> Preview
+                            </div>
+                            <video class="preview-video" id="preview-vid-@post.Id" preload="metadata" loop muted playsinline style="display: none; width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 5; opacity: 0; transition: opacity 0.3s; pointer-events: none;"></video>
+
                             @if (!string.IsNullOrEmpty(post.ThumbnailUrl))
                             {
                                 <img data-src="?handler=ProxyImage&url=@System.Web.HttpUtility.UrlEncode(post.ThumbnailUrl)"
                                      data-duration="@(post.HasVideo ? (post.FirstVideoUrl ?? post.ThumbnailUrl) : "")"
                                      class="lazy-image w-100 h-100 img-loading"
-                                     style="object-fit: cover;"
+                                     style="object-fit: cover; position: relative; z-index: 1;"
                                      alt="Post Thumbnail" />
                             }
                             else
                             {
-                                <div class="w-100 h-100 d-flex align-items-center justify-content-center text-secondary">
+                                <div class="w-100 h-100 d-flex align-items-center justify-content-center text-secondary" style="position: relative; z-index: 1;">
                                     <i class="bi @(post.HasVideo ? "bi-play-circle-fill" : "bi-image") fs-1 text-white-50"></i>
                                 </div>
                             }
 
                             @if (post.HasVideo)
                             {
-                                <span class="position-absolute top-0 end-0 badge bg-danger m-2 shadow-sm">VIDEO</span>
-                                <span class="duration-badge" data-duration-display style="display: @(post.VideoDuration > 0 ? "block" : "none");">
+                                <span class="position-absolute top-0 end-0 badge bg-danger m-2 shadow-sm" style="z-index: 10;">VIDEO</span>
+                                <span class="duration-badge" data-duration-display style="display: @(post.VideoDuration > 0 ? "block" : "none"); z-index: 10;">
                                     @if (post.VideoDuration > 0)
                                     {
                                         TimeSpan t = TimeSpan.FromSeconds(post.VideoDuration);

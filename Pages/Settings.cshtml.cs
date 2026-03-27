@@ -41,6 +41,7 @@ namespace Siphon.Pages
         [BindProperty] public bool PendingRetentionEnabled { get; set; }
         [BindProperty] public bool ApprovedRetentionEnabled { get; set; }
         [BindProperty] public double HeatmapSensitivity { get; set; }
+        [BindProperty] public bool LookupPreviewGeneration { get; set; }
 
         public void OnGet()
         {
@@ -75,6 +76,7 @@ namespace Siphon.Pages
                 ApprovedRetentionEnabled = userConfig.ApprovedRetentionEnabled;
                 DefaultApprovedDirName = userConfig.DefaultApprovedDirDisplayName;
                 HeatmapSensitivity = userConfig.heatmapSensitivity;
+                LookupPreviewGeneration = userConfig.LookupPreviewGenerationEnabled;
             }
 
             // 2. Load Existing Directories
@@ -133,7 +135,8 @@ namespace Siphon.Pages
                 cacheMinutes, 
                 PendingRetentionEnabled, 
                 ApprovedRetentionEnabled, 
-                HeatmapSensitivity
+                HeatmapSensitivity,
+                LookupPreviewGeneration
             );
 
             // 3. Handle Directory Logic (Create New & Delete Removed)

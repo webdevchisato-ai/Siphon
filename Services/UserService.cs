@@ -17,6 +17,7 @@ namespace Siphon.Services
         public bool PendingRetentionEnabled { get; set; } = true;
         public bool ApprovedRetentionEnabled { get; set; } = true;
         public double heatmapSensitivity { get; set; } = 2.7;
+        public bool LookupPreviewGenerationEnabled { get; set; } = true;
     }
 
     public class UserService
@@ -107,6 +108,13 @@ namespace Siphon.Services
             return config.heatmapSensitivity;
         }
 
+        public bool GetLookupPreviewGenerationStatus()
+        {
+            var config = GetUserConfig();
+            if (config == null) return true;
+            return config.LookupPreviewGenerationEnabled;
+        }
+
         public void CreateUser(string username, string password, int preservationMinutes, int approvedPresservationMinutes, bool generateHeatmap, string defaultArrpovedDir)
         {
             // Initial creation
@@ -120,13 +128,14 @@ namespace Siphon.Services
                 cacheRetentionMinutes = 60,
                 PendingRetentionEnabled = true,
                 ApprovedRetentionEnabled = true,
-                heatmapSensitivity = 2.7
+                heatmapSensitivity = 2.7,
+                LookupPreviewGenerationEnabled = true
             };
             SetPassword(config, password);
             SaveConfig(config);
         }
 
-        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins, bool generateHeatmap, string defaultArrpovedDir, int cacheRetention, bool pendingRetentionOn, bool approvedRetentionOn, double heatmapSens)
+        public void UpdateConfiguration(string username, string newPassword, int preservationMinutes, int ApporvedRetentionMins, bool generateHeatmap, string defaultArrpovedDir, int cacheRetention, bool pendingRetentionOn, bool approvedRetentionOn, double heatmapSens, bool lookupPreviewGen)
         {
             // Load existing to preserve Salt/Hash if password isn't changing
             var config = GetUserConfig() ?? new UserConfig();
@@ -140,6 +149,7 @@ namespace Siphon.Services
             config.PendingRetentionEnabled = pendingRetentionOn;
             config.ApprovedRetentionEnabled = approvedRetentionOn;
             config.heatmapSensitivity = heatmapSens;
+            config.LookupPreviewGenerationEnabled = lookupPreviewGen;
 
             if (!string.IsNullOrWhiteSpace(newPassword))
             {
