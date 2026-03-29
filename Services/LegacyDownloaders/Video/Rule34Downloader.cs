@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using PuppeteerSharp;
 using System.Text.RegularExpressions;
-
 namespace Siphon.Services.LegacyDownloaders.Video
 {
     public class Rule34Downloader
@@ -44,6 +43,14 @@ namespace Siphon.Services.LegacyDownloaders.Video
 
                     var page = await browser.NewPageAsync();
 
+                    // --- Stealth Tweaks ---
+                    // Hide headless status and add standard headers
+                    await page.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+                    await page.SetExtraHttpHeadersAsync(new Dictionary<string, string>
+                    {
+                        { "Accept-Language", "en-US,en;q=0.9" }
+                    });
+
                     _job.Status = "Navigating to Page...";
                     _logger.LogInformation($"Attempt {attempt}: Navigating to {_url}");
 
@@ -53,18 +60,39 @@ namespace Siphon.Services.LegacyDownloaders.Video
                     var pageTitle = await page.GetTitleAsync();
                     if (pageTitle != null && pageTitle.Contains("Just a moment"))
                     {
-                        _logger.LogWarning($"Attempt {attempt}: Cloudflare challenge detected. Waiting up to 30s for it to resolve...");
-                        _job.Status = "Waiting for Cloudflare challenge...";
+                        _logger.LogWarning($"Attempt {attempt}: Cloudflare challenge detected. Attempting bypass...");
+                        _job.Status = "Bypassing Cloudflare challenge...";
 
                         try
                         {
-                            // Wait for the main body or video container to appear, indicating CF passed
-                            await page.WaitForSelectorAsync("#gelcomVideoContainer", new WaitForSelectorOptions { Timeout = 30000 }).WaitAsync(token);
+                            // Give the Turnstile widget a moment to load
+                            var cfIframe = await page.WaitForSelectorAsync("iframe", new WaitForSelectorOptions { Timeout = 5000 });
+                            if (cfIframe != null)
+                            {
+                                await Task.Delay(2000, token); // Brief pause before interaction
+                                var box = await cfIframe.BoundingBoxAsync();
+                                if (box != null)
+                                {
+                                    // Simulate a human click in the center of the Turnstile widget
+                                    await page.Mouse.ClickAsync(box.X + box.Width / 2, box.Y + box.Height / 2);
+                                    _logger.LogInformation($"Attempt {attempt}: Clicked Cloudflare Turnstile widget.");
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            _logger.LogDebug($"Attempt {attempt}: No visible Cloudflare iframe found to click, waiting for auto-resolve.");
+                        }
+
+                        try
+                        {
+                            // Wait for the video player or sidebar to appear, indicating CF passed
+                            await page.WaitForSelectorAsync("#gelcomVideoPlayer, .link-list", new WaitForSelectorOptions { Timeout = 25000 }).WaitAsync(token);
                             _logger.LogInformation($"Attempt {attempt}: Cloudflare challenge bypassed successfully.");
                         }
                         catch (Exception)
                         {
-                            throw new Exception("Cloudflare challenge did not resolve automatically. Tor IP may be hard-blocked.");
+                            throw new Exception("Cloudflare challenge did not resolve. Tor IP may be hard-blocked, or Headless detection triggered.");
                         }
                     }
 
@@ -84,23 +112,30 @@ namespace Siphon.Services.LegacyDownloaders.Video
                         _logger.LogWarning(ex, $"Attempt {attempt}: Failed to extract title. Defaulting to '{name}'");
                     }
 
-                    _job.Status = "Locating download button...";
+                    _job.Status = "Locating video source...";
 
-                    // Wait for the specific download button to appear in the DOM
-                    await page.WaitForSelectorAsync("#gelcomVideoPlayer_download", new WaitForSelectorOptions { Timeout = 15000 }).WaitAsync(token);
+                    // Wait for the video player or the sidebar links to appear in the DOM
+                    await page.WaitForSelectorAsync("#gelcomVideoPlayer, .link-list", new WaitForSelectorOptions { Timeout = 15000 }).WaitAsync(token);
 
-                    // Extract the href from the download button, with a fallback to the video source
+                    // Extract the direct link from the sidebar, the download button, or the video source
                     var videoSrc = await page.EvaluateFunctionAsync<string>(@"() => {
+                        // 1. Try to find the 'Original image' link in the sidebar (most reliable for direct source)
+                        const origLink = Array.from(document.querySelectorAll('.link-list a')).find(a => a.textContent.trim() === 'Original image');
+                        if (origLink && origLink.href && origLink.href !== '' && !origLink.href.endsWith('#')) {
+                            return origLink.href;
+                        }
+
+                        // 2. Try the JS populated download button
                         const downloadBtn = document.querySelector('#gelcomVideoPlayer_download');
-                        
                         if (downloadBtn && downloadBtn.href && downloadBtn.href !== '' && !downloadBtn.href.endsWith('#')) {
                             return downloadBtn.href;
                         }
 
-                        // Fallback: If the JS hasn't populated the href yet, grab it directly from the video tag
+                        // 3. Fallback: Grab it directly from the video tag
                         const v = document.querySelector('#gelcomVideoPlayer');
                         if (v && v.src) return v.src;
                         
+                        // 4. Fallback: Grab it from the source tag inside the video
                         const s = document.querySelector('#gelcomVideoPlayer source');
                         return s ? s.src : null;
                     }");

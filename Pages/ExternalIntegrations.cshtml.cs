@@ -189,7 +189,7 @@ namespace Siphon.Pages
             public string Url { get; set; }
         }
 
-        public void OnGet() 
+        public void OnGet()
         {
             GeneratePreviews = _userService.GetLookupPreviewGenerationStatus();
         }
@@ -324,18 +324,27 @@ namespace Siphon.Pages
         {
             Response.ContentType = "text/event-stream";
 
+            // Grab the cancellation token that triggers when the client disconnects (e.g., clicks "Load More")
+            CancellationToken clientDisconnectedToken = HttpContext.RequestAborted;
+
             // Important: Thread-safe locking required to prevent ASP.NET Core from throwing
-            // 'Concurrent reads or writes are not supported' when our 20 ffmpeg threads try to reply.
+            // 'Concurrent reads or writes are not supported' when our ffmpeg threads try to reply.
             using var sseLock = new SemaphoreSlim(1, 1);
 
             async Task SendEvent(string type, string payload)
             {
-                await sseLock.WaitAsync();
+                if (clientDisconnectedToken.IsCancellationRequested) return;
+
+                await sseLock.WaitAsync(clientDisconnectedToken);
                 try
                 {
                     var json = JsonSerializer.Serialize(new { type, payload });
-                    await Response.WriteAsync($"data: {json}\n\n");
-                    await Response.Body.FlushAsync();
+                    await Response.WriteAsync($"data: {json}\n\n", clientDisconnectedToken);
+                    await Response.Body.FlushAsync(clientDisconnectedToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Client disconnected during write, ignore safely
                 }
                 finally
                 {
@@ -362,7 +371,7 @@ namespace Siphon.Pages
                     try
                     {
                         await SendEvent("status", "Checking local cache for artists...");
-                        string json = await System.IO.File.ReadAllTextAsync(cachePath);
+                        string json = await System.IO.File.ReadAllTextAsync(cachePath, clientDisconnectedToken);
                         rawCreators = JsonSerializer.Deserialize<List<ExternalCreator>>(json);
                         if (rawCreators != null) SearchTriggered = true;
                     }
@@ -376,10 +385,12 @@ namespace Siphon.Pages
 
                     var totalTimeout = TimeSpan.FromMinutes(3);
                     var fetchTask = FetchCreatorsFromApi(Site);
-                    var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
+                    var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout, clientDisconnectedToken));
 
                     if (completedFetch != fetchTask)
                     {
+                        if (clientDisconnectedToken.IsCancellationRequested) return new EmptyResult();
+
                         IsSearchTimeout = true;
                         timeOutType = TimeOutType.StandardTimeout;
                         _logger.LogWarning("Search timed out during API fetch phase.");
@@ -392,7 +403,7 @@ namespace Siphon.Pages
                         if (rawCreators != null && rawCreators.Count > 0)
                         {
                             string json = JsonSerializer.Serialize(rawCreators, new JsonSerializerOptions { WriteIndented = true });
-                            await System.IO.File.WriteAllTextAsync(cachePath, json);
+                            await System.IO.File.WriteAllTextAsync(cachePath, json, clientDisconnectedToken);
                         }
                         else
                         {
@@ -444,7 +455,7 @@ namespace Siphon.Pages
             int maxRetries = Site == "reddit.com" ? 200000 : 20;
             bool keepSearching = true;
 
-            while (keepSearching)
+            while (keepSearching && !clientDisconnectedToken.IsCancellationRequested)
             {
                 string scope = string.IsNullOrWhiteSpace(SearchUser) ? "Global" : $"User_{SearchUser}";
                 if (ServiceType != "all") scope += $"_{ServiceType}";
@@ -459,7 +470,7 @@ namespace Siphon.Pages
                     try
                     {
                         await SendEvent("status", $"Checking local cache (Offset {Offset})...");
-                        string json = await System.IO.File.ReadAllTextAsync(cachePath);
+                        string json = await System.IO.File.ReadAllTextAsync(cachePath, clientDisconnectedToken);
                         rawPosts = JsonSerializer.Deserialize<List<ExternalPost>>(json);
 
                         if (rawPosts != null)
@@ -485,10 +496,12 @@ namespace Siphon.Pages
                     var totalTimeout = TimeSpan.FromMinutes(3);
                     var stopwatch = Stopwatch.StartNew();
                     var fetchTask = FetchFromApi(Site, SearchUser, Offset);
-                    var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout));
+                    var completedFetch = await Task.WhenAny(fetchTask, Task.Delay(totalTimeout, clientDisconnectedToken));
 
                     if (completedFetch != fetchTask)
                     {
+                        if (clientDisconnectedToken.IsCancellationRequested) return new EmptyResult();
+
                         IsSearchTimeout = true;
                         timeOutType = TimeOutType.StandardTimeout;
                         _logger.LogWarning("Search timed out during API fetch phase.");
@@ -547,10 +560,12 @@ namespace Siphon.Pages
                                 {
                                     await SendEvent("status", $"Found {rawPosts.Count} raw posts. Enriching metadata...");
                                     var enrichTask = EnrichWithVideoDurations(rawPosts, (msg) => SendEvent("status", msg));
-                                    var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining));
+                                    var completedEnrich = await Task.WhenAny(enrichTask, Task.Delay(remaining, clientDisconnectedToken));
 
                                     if (completedEnrich != enrichTask)
                                     {
+                                        if (clientDisconnectedToken.IsCancellationRequested) return new EmptyResult();
+
                                         IsSearchTimeout = true;
                                         _logger.LogWarning("Search timed out during Video Enrichment phase.");
                                         await SendEvent("warning", "Timeout during enrichment. Some metadata may be missing.");
@@ -561,10 +576,10 @@ namespace Siphon.Pages
                                     IsSearchTimeout = true;
                                 }
 
-                                if (!IsSearchTimeout)
+                                if (!IsSearchTimeout && !clientDisconnectedToken.IsCancellationRequested)
                                 {
                                     string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
-                                    await System.IO.File.WriteAllTextAsync(cachePath, json);
+                                    await System.IO.File.WriteAllTextAsync(cachePath, json, clientDisconnectedToken);
                                 }
                             }
                         }
@@ -586,14 +601,18 @@ namespace Siphon.Pages
                     {
                         await SendEvent("status", $"Enriching {postsNeedingDuration.Count} cached video items...");
                         var enrichTask = EnrichWithVideoDurations(postsNeedingDuration, (msg) => SendEvent("status", msg));
-                        var completed = await Task.WhenAny(enrichTask, Task.Delay(TimeSpan.FromMinutes(3)));
+                        var completed = await Task.WhenAny(enrichTask, Task.Delay(TimeSpan.FromMinutes(3), clientDisconnectedToken));
 
-                        if (completed != enrichTask) IsSearchTimeout = true;
+                        if (completed != enrichTask)
+                        {
+                            if (clientDisconnectedToken.IsCancellationRequested) return new EmptyResult();
+                            IsSearchTimeout = true;
+                        }
 
-                        if (!IsSearchTimeout)
+                        if (!IsSearchTimeout && !clientDisconnectedToken.IsCancellationRequested)
                         {
                             string json = JsonSerializer.Serialize(rawPosts, new JsonSerializerOptions { WriteIndented = true });
-                            await System.IO.File.WriteAllTextAsync(cachePath, json);
+                            await System.IO.File.WriteAllTextAsync(cachePath, json, clientDisconnectedToken);
                         }
                     }
                 }
@@ -641,6 +660,8 @@ namespace Siphon.Pages
                 }
             }
 
+            if (clientDisconnectedToken.IsCancellationRequested) return new EmptyResult();
+
             int correctNextOffset = Offset + 50;
             await SendEvent("metaOffset", JsonSerializer.Serialize(new { nextOffset = correctNextOffset }));
             await SendEvent("status", "Rendering results...");
@@ -649,7 +670,7 @@ namespace Siphon.Pages
             await SendEvent("htmlGrid", html);
 
             // --- VIDEO PREVIEW GENERATION TRIGGER ---
-            if (GeneratePreviews == true)
+            if (GeneratePreviews == true && !clientDisconnectedToken.IsCancellationRequested)
             {
                 var videoPostsToPreview = Posts?.Where(p => p.HasVideo).ToList() ?? new List<ExternalPost>();
                 if (videoPostsToPreview.Any())
@@ -657,41 +678,86 @@ namespace Siphon.Pages
                     string previewDir = Path.Combine(cacheFolder, "Previews");
                     if (!Directory.Exists(previewDir)) Directory.CreateDirectory(previewDir);
 
-                    // Creates 20 concurrent threads to crunch down ffmpeg processing
-                    await GenerateVideoPreviewsAsync(videoPostsToPreview, async (t, p) => await SendEvent(t, p), previewDir);
+                    // Pass the cancellation token to kill orphaned tasks
+                    await GenerateVideoPreviewsAsync(videoPostsToPreview, async (t, p) => await SendEvent(t, p), previewDir, clientDisconnectedToken);
                 }
             }
 
-            await SendEvent("complete", "Search completed successfully.");
+            if (!clientDisconnectedToken.IsCancellationRequested)
+            {
+                await SendEvent("complete", "Search completed successfully.");
+            }
+
             return new EmptyResult();
         }
 
-        private async Task GenerateVideoPreviewsAsync(List<ExternalPost> videoPosts, Func<string, string, Task> sendEvent, string previewDir)
+        private async Task WaitUntilMemorySafeAsync(CancellationToken cancellationToken)
         {
-            var semaphore = new SemaphoreSlim(20);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var gcInfo = GC.GetGCMemoryInfo();
+                // Ensure we don't divide by zero if OS reporting is odd
+                if (gcInfo.TotalAvailableMemoryBytes > 0)
+                {
+                    double memoryLoad = (double)gcInfo.MemoryLoadBytes / gcInfo.TotalAvailableMemoryBytes;
+                    if (memoryLoad < 0.90)
+                    {
+                        break;
+                    }
+                    _logger.LogWarning($"System memory above 90% ({memoryLoad:P2}). Pausing preview generation queue...");
+                }
+                else
+                {
+                    // Fallback to break out if the OS fails to report total bounds
+                    break;
+                }
+
+                try
+                {
+                    await Task.Delay(2000, cancellationToken); // Wait before trying again, respects cancellation
+                }
+                catch (TaskCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+
+        private async Task GenerateVideoPreviewsAsync(List<ExternalPost> videoPosts, Func<string, string, Task> sendEvent, string previewDir, CancellationToken cancellationToken)
+        {
+            // Base the threads off settings, defaulting to 5. Prevent excessive concurrent FFmpeg operations.
+            int threadCount = Math.Max(1, DOWNLOADERThreads > 0 ? DOWNLOADERThreads : 5);
+            var semaphore = new SemaphoreSlim(threadCount);
+
             int total = videoPosts.Count;
             int completed = 0;
 
-            _logger.LogInformation($"Starting preview generation for {total} videos.");
+            _logger.LogInformation($"Starting preview generation for {total} videos using {threadCount} threads.");
             await sendEvent("status", $"Generating {total} video previews...");
 
             var tasks = videoPosts.Select(async post =>
             {
-                await semaphore.WaitAsync();
+                string previewPath = string.Empty;
+
                 try
                 {
+                    // Dynamic Check: Will pause queueing if system memory is > 90%
+                    await WaitUntilMemorySafeAsync(cancellationToken);
+
+                    await semaphore.WaitAsync(cancellationToken);
+
                     string videoUrl = post.FirstVideoUrl ?? post.ThumbnailUrl;
                     if (string.IsNullOrEmpty(videoUrl)) return;
 
                     if (videoUrl.Contains("redgifs.com"))
                     {
-                        var res = await SharedScraperLogic.ResolveRedGifsUrlWithDurationAsync(videoUrl, CancellationToken.None);
+                        var res = await SharedScraperLogic.ResolveRedGifsUrlWithDurationAsync(videoUrl, cancellationToken);
                         if (!string.IsNullOrEmpty(res.Url)) videoUrl = res.Url;
                     }
 
                     using var sha = SHA256.Create();
                     var hash = Convert.ToHexString(sha.ComputeHash(Encoding.UTF8.GetBytes(videoUrl)));
-                    string previewPath = Path.Combine(previewDir, $"{hash}.mp4");
+                    previewPath = Path.Combine(previewDir, $"{hash}.mp4");
                     string relativePreviewUrl = $"/ExternalIntegrationCache/Previews/{hash}.mp4";
 
                     if (!System.IO.File.Exists(previewPath))
@@ -710,27 +776,36 @@ namespace Siphon.Pages
                         if (duration <= 0) duration = await GetVideoDuration(videoUrl, headers);
                         if (duration <= 0) duration = 5;
 
+                        // Memory & Speed Fix: Cap the maximum range we seek into to the first 30 seconds
+                        double effectiveDuration = Math.Min(duration, 30.0);
+
                         var sb = new StringBuilder();
-                        if (duration > 10)
+                        if (effectiveDuration > 10)
                         {
-                            int t1 = (int)(duration * 0.10);
-                            int t2 = (int)(duration * 0.40);
-                            int t3 = (int)(duration * 0.70);
+                            int t1 = (int)(effectiveDuration * 0.10);
+                            int t2 = (int)(effectiveDuration * 0.40);
+                            int t3 = (int)(effectiveDuration * 0.70);
+
                             sb.Append($"-y -headers \"{headers}\" ");
-                            sb.Append($"-ss {t1} -t 3 -i \"{videoUrl}\" ");
-                            sb.Append($"-ss {t2} -t 3 -i \"{videoUrl}\" ");
-                            sb.Append($"-ss {t3} -t 3 -i \"{videoUrl}\" ");
+                            // Lowered -t from 3 to 2 to process faster and use less RAM
+                            sb.Append($"-ss {t1} -t 2 -i \"{videoUrl}\" ");
+                            sb.Append($"-ss {t2} -t 2 -i \"{videoUrl}\" ");
+                            sb.Append($"-ss {t3} -t 2 -i \"{videoUrl}\" ");
                             sb.Append("-filter_complex \"[0:v][1:v][2:v]concat=n=3:v=1:a=0,scale=320:-2[v]\" ");
-                            sb.Append($"-map \"[v]\" -c:v libx264 -preset ultrafast -crf 28 -an \"{previewPath}\"");
+                            // Reduced quality (-crf 32) and added -threads 1 to cap CPU usage per process
+                            sb.Append($"-map \"[v]\" -c:v libx264 -preset ultrafast -crf 32 -threads 1 -an \"{previewPath}\"");
                         }
                         else
                         {
                             sb.Append($"-y -headers \"{headers}\" -i \"{videoUrl}\" ");
-                            sb.Append($"-vf \"scale=320:-2\" -c:v libx264 -preset ultrafast -crf 28 -an \"{previewPath}\"");
+                            sb.Append($"-vf \"scale=320:-2\" -c:v libx264 -preset ultrafast -crf 32 -threads 1 -an \"{previewPath}\"");
                         }
 
                         _logger.LogInformation($"[Preview] Generating preview for {post.Id} ({videoUrl})...");
-                        await RunFfmpeg(sb.ToString());
+
+                        // Execute FFmpeg, passing the cancellation token
+                        await RunFfmpeg(sb.ToString(), cancellationToken);
+
                         _logger.LogInformation($"[Preview] Successfully generated preview for {post.Id}.");
                     }
                     else
@@ -744,6 +819,15 @@ namespace Siphon.Pages
                         await sendEvent("previewReady", JsonSerializer.Serialize(new { postId = post.Id, previewUrl = relativePreviewUrl }));
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogWarning($"[Preview] Generation canceled by user for {post.Id}. Deleting incomplete file...");
+                    // Delete the partially generated .mp4 file to prevent corruption issues later
+                    if (!string.IsNullOrEmpty(previewPath) && System.IO.File.Exists(previewPath))
+                    {
+                        try { System.IO.File.Delete(previewPath); } catch { }
+                    }
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError($"[Preview] Failed for {post.Id}: {ex.Message}");
@@ -751,15 +835,25 @@ namespace Siphon.Pages
                 finally
                 {
                     var c = Interlocked.Increment(ref completed);
-                    _logger.LogInformation($"[Preview] Progress: {c}/{total} completed.");
-                    await sendEvent("status", $"Generating video previews ({c}/{total})...");
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogInformation($"[Preview] Progress: {c}/{total} completed.");
+                        await sendEvent("status", $"Generating video previews ({c}/{total})...");
+                    }
 
                     semaphore.Release();
                 }
             });
 
-            await Task.WhenAll(tasks);
-            _logger.LogInformation($"Finished preview generation for {total} videos.");
+            try
+            {
+                await Task.WhenAll(tasks);
+                _logger.LogInformation($"Finished preview generation for {total} videos.");
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation($"Preview generation tasks were canceled globally.");
+            }
         }
 
         private void EnforceCacheLimit(string directory, int maxFiles)
@@ -781,7 +875,7 @@ namespace Siphon.Pages
             }
         }
 
-        private async Task RunFfmpeg(string args)
+        private async Task RunFfmpeg(string args, CancellationToken cancellationToken)
         {
             var p = Process.Start(new ProcessStartInfo
             {
@@ -791,7 +885,22 @@ namespace Siphon.Pages
                 UseShellExecute = false,
                 RedirectStandardError = true
             });
-            await p.WaitForExitAsync();
+
+            // Register a callback to kill the specific FFmpeg process if the user navigates away
+            await using (cancellationToken.Register(() =>
+            {
+                try
+                {
+                    if (!p.HasExited)
+                    {
+                        p.Kill(true); // Forcefully close ffmpeg and any child processes
+                    }
+                }
+                catch { /* Ignore errors if process already died */ }
+            }))
+            {
+                await p.WaitForExitAsync(cancellationToken);
+            }
         }
 
         private async Task<string> RenderPartialToStringAsync(string viewName, object model)
@@ -1185,21 +1294,26 @@ namespace Siphon.Pages
                 }
 
                 double duration = await GetVideoDuration(videoUrl, headers);
-                double seekTime = (duration >= 5.0) ? 5.0 : Math.Max(0, duration - 0.5);
+
+                // Memory Optimization: Restrict max seek for frame grabbing to early video to prevent large chunk downloads.
+                double seekTime = Math.Min(duration, 30.0);
+                seekTime = (seekTime >= 5.0) ? 5.0 : Math.Max(0, seekTime - 0.5);
 
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "ffmpeg",
-                    Arguments = $"-y -headers \"{headers}\" -ss {seekTime} -i \"{videoUrl}\" -vframes 1 -q:v 4 \"{filePath}\"",
+                    // Added -threads 1 for performance stability
+                    Arguments = $"-y -headers \"{headers}\" -ss {seekTime} -i \"{videoUrl}\" -vframes 1 -threads 1 -q:v 4 \"{filePath}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
 
+                // Because this is just a quick frame grab, we pass the RequestAborted token as well so it cancels cleanly if they close the tab
                 using var process = new Process { StartInfo = startInfo };
                 process.Start();
-                await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(20));
+                await process.WaitForExitAsync(HttpContext.RequestAborted).WaitAsync(TimeSpan.FromSeconds(20));
 
                 if (System.IO.File.Exists(filePath))
                 {
@@ -1228,7 +1342,8 @@ namespace Siphon.Pages
                 var startInfo = new ProcessStartInfo
                 {
                     FileName = "ffprobe",
-                    Arguments = $"-v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -headers \"{headers}\" \"{url}\"",
+                    // Memory Fix: Adding limits to prevent ffprobe from reading indefinitely if it can't find metadata
+                    Arguments = $"-v error -analyzeduration 5000000 -probesize 5000000 -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 -headers \"{headers}\" \"{url}\"",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,

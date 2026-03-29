@@ -550,6 +550,11 @@
                         serviceSelect.value = 'reddit';
                         toggleFilters();
                     }
+
+                    if (siteSelect.value === 'rule34.xxx') {
+                        viewModeSelect.value = 'posts';
+                        toggleFilters();
+                    }
                     updateServiceOptions();
                     updateSearchLabels();
                 });
