@@ -797,11 +797,46 @@
                             statusIcon.className = 'bi bi-exclamation-triangle-fill flex-shrink-0 me-3 fs-3';
                             statusHeader.innerText = "Error";
                             statusMessage.innerText = data.payload;
+
+                            // Replace spinner with error directly in the grid
+                            if (resultsContainer.innerHTML.includes('spinner-grow')) {
+                                resultsContainer.innerHTML = `
+                                    <div class="text-center py-5">
+                                        <div class="mb-3"><i class="bi bi-exclamation-triangle text-danger" style="font-size: 4rem;"></i></div>
+                                        <h4 class="fw-bold text-danger">Search Failed</h4>
+                                        <p class="text-muted">${data.payload}</p>
+                                        <button type="button" onclick="document.getElementById('Offset').value='0'; document.getElementById('filterForm').submit();" class="btn btn-outline-secondary mt-3"><i class="bi bi-arrow-counterclockwise"></i> Reset Search</button>
+                                    </div>
+                                `;
+                                paginationControls.style.display = 'none';
+                            }
                         } else if (data.type === 'warning') {
                             statusAlert.className = 'alert alert-warning d-flex align-items-center shadow';
                             statusIcon.className = 'bi bi-exclamation-circle-fill flex-shrink-0 me-3 fs-3';
                             statusHeader.innerText = "Warning";
                             statusMessage.innerText = data.payload;
+
+                            // Check if this warning indicates we hit the end of the feed
+                            const isEndOfFeed = data.payload.toLowerCase().includes("end of") || data.payload.toLowerCase().includes("stopping search");
+                            const currentOffset = parseInt(document.getElementById('Offset').value) || 0;
+                            
+                            const prevBtnHtml = currentOffset > 0
+                                ? `<button type="button" onclick="loadPrevPage()" class="btn btn-outline-dark mt-3 me-2"><i class="bi bi-arrow-left"></i> Previous Page</button>`
+                                : '';
+
+                            // Replace spinner with warning directly in the grid
+                            if (resultsContainer.innerHTML.includes('spinner-grow') || isEndOfFeed) {
+                                resultsContainer.innerHTML = `
+                                    <div class="text-center py-5">
+                                        <div class="mb-3"><i class="bi ${isEndOfFeed ? 'bi-journal-x' : 'bi-exclamation-circle'} text-warning" style="font-size: 4rem;"></i></div>
+                                        <h4 class="fw-bold text-warning">${isEndOfFeed ? 'End of Feed' : 'Notice'}</h4>
+                                        <p class="text-muted">${data.payload}</p>
+                                        ${prevBtnHtml}
+                                        <button type="button" onclick="document.getElementById('Offset').value='0'; document.getElementById('filterForm').submit();" class="btn btn-outline-secondary mt-3"><i class="bi bi-arrow-counterclockwise"></i> Back to Start</button>
+                                    </div>
+                                `;
+                                paginationControls.style.display = 'none';
+                            }
                         } else if (data.type === 'htmlGrid') {
                             resultsContainer.innerHTML = data.payload;
                             reinitLazyLoading();
@@ -835,12 +870,12 @@
                             const payload = JSON.parse(data.payload);
                             const vidEl = document.getElementById('preview-vid-' + payload.postId);
                             const iconEl = document.getElementById('preview-icon-' + payload.postId);
-                
+             
                             if (vidEl) {
                                 vidEl.src = payload.previewUrl;
                                 vidEl.style.display = 'block';
                                 vidEl.load(); // Forces the browser to load the new src data
-                    
+                 
                                 if(iconEl) iconEl.style.display = 'inline-block';
 
                                 const card = vidEl.closest('.post-card');
@@ -878,7 +913,7 @@
                     dynamicNextOffset = newNextOffset;
                     const currentOffset = parseInt(document.getElementById('Offset').value) || 0;
                     const btnPrev = document.getElementById('btnLoadPrev');
-        
+         
                     // Hide the Previous button if we are at the beginning
                     if (currentOffset <= 0) {
                         btnPrev.style.display = 'none';
